@@ -1,0 +1,11 @@
+{
+    "vertex": "ldlib2:fast_blit",
+    "fragment": "photon:bright_pass",
+    "samplers": [
+        { "name": "inputSampler" }
+    ],
+    "uniforms": [
+        { "name": "Threshold",     "type": "float",     "count": 1,  "values": [ 1 ] },
+        { "name": "Knee",      "type": "float",     "count": 1,  "values": [ 0.1 ] }
+    ]
+}

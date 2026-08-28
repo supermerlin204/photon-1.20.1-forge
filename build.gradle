@@ -1,0 +1,236 @@
+plugins {
+    id 'java-library'
+    id 'eclipse'
+    id 'idea'
+    id 'maven-publish'
+    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+}
+
+version = mod_version
+group = maven_group
+
+configurations {
+    libraries
+    api.extendsFrom libraries
+
+    localImplementation
+    runtimeClasspath.extendsFrom localImplementation
+    compileOnly.extendsFrom localImplementation
+}
+
+def requestedRunTasks = gradle.startParameter.taskNames.collect { it.tokenize(':').last() }
+def serverRunRequested = requestedRunTasks.any { it in ['runServer', 'runGameTestServer'] }
+
+// Client rendering mods must never enter a physical server. Both switches retain their compile API.
+if (serverRunRequested || project.hasProperty('skipClientRenderMods')) {
+    configurations.runtimeClasspath.exclude group: 'maven.modrinth', module: 'embeddium'
+    configurations.runtimeClasspath.exclude group: 'maven.modrinth', module: 'oculus'
+} else if (project.hasProperty('skipOculus')) {
+    // Diagnostic client run switch: expose vanilla GLSL errors while keeping Embeddium active.
+    configurations.runtimeClasspath.exclude group: 'maven.modrinth', module: 'oculus'
+}
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+    flatDir {
+        dirs 'libs'
+    }
+    maven {
+        name = "Modrinth"
+        url = "https://api.modrinth.com/maven"
+        content {
+            includeGroup "maven.modrinth"
+        }
+    } // Modrinth File
+    maven {
+        // location of the maven that hosts JEI files since January 2023
+        name = "Jared's maven"
+        url = "https://maven.blamejared.com/"
+    }
+    maven {
+        // location of a maven mirror for JEI files, as a fallback
+        name = "ModMaven"
+        url = "https://modmaven.dev"
+    }
+    maven { url = "https://maven.parchmentmc.org" } // Parchment mappings
+    maven { url = "https://maven.quiltmc.org/repository/release" } // Quilt Mappings
+    // mavens for Forge-exclusives
+    maven { // Create Forge and Registrate Forge
+        url = "https://maven.tterrag.com/"
+        content {
+            includeGroup("com.tterrag.registrate")
+            includeGroup("com.simibubi.create")
+        }
+    }
+    maven { url = "https://jitpack.io/" } // Mixin Extras, Fabric ASM
+    maven { url = "https://thedarkcolour.github.io/KotlinForForge/" }
+    // LDLib2
+    maven {
+        // location of the maven that hosts JEI files since January 2023
+        name = "Jared's maven"
+        url = "https://maven.firstdark.dev/snapshots"
+    }
+}
+
+base {
+    archivesName = "${project.name}-${minecraft_version}"
+}
+
+// Minecraft 1.20.1 and Forge 47 target Java 17.
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+    withSourcesJar()
+}
+
+minecraft {
+    mappings channel: mapping_channel, version: mapping_version
+    copyIdeResources = true
+    accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
+
+// Default run configurations.
+// These can be tweaked, removed, or duplicated as needed.
+runs {
+    // applies to all the run configs below
+    configureEach {
+        // Recommended logging data for a userdev environment
+        // The markers can be added/remove as needed separated by commas.
+        // "SCAN": For mods scan.
+        // "REGISTRIES": For firing of registry events.
+        // "REGISTRYDUMP": For getting the contents of all registries.
+        workingDirectory project.file('run')
+        property 'forge.logging.markers', 'REGISTRIES'
+
+        // Recommended logging level for the console
+        // You can set various levels here.
+        // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
+        property 'forge.logging.console.level', 'debug'
+        property 'mixin.env.remapRefMap', 'true'
+        property 'mixin.env.refMapRemappingFile', file('build/createSrgToMcp/output.srg').absolutePath
+        arg '-mixin.config=photon.mixins.json'
+//        systemProperty 'mixin.debug', 'true'
+
+        mods {
+            "${mod_id}" {
+                source sourceSets.main
+            }
+        }
+    }
+
+    client {
+        // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
+        property 'forge.enabledGameTestNamespaces', project.mod_id
+    }
+
+    server {
+        property 'forge.enabledGameTestNamespaces', project.mod_id
+        args '--nogui'
+    }
+
+    // This run config launches GameTestServer and runs all registered gametests, then exits.
+    // By default, the server will crash when no gametests are provided.
+    // The gametest system is also enabled by default for other run configs under the /test command.
+    gameTestServer {
+        property 'forge.enabledGameTestNamespaces', project.mod_id
+    }
+
+    data {
+        // example of overriding the workingDirectory set in configureEach above, uncomment if you want to use it
+        // workingDirectory project.file('run-data')
+
+        // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
+        workingDirectory project.file('run-data')
+        args '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
+    }
+}
+}
+
+// LDLib2's in-client UI test harness: -PldTest wiring plus the verifyUiTest gate.
+// Inert unless -PldTest is given. See LDLib2 docs/uitest.md.
+apply from: rootProject.file('gradle/ldlib2-uitest.gradle')
+
+// Include resources generated by data generators.
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+// LDLib2's published runtime jar does not contain its optional in-client UI test harness.
+// Keep the scenarios in source control, but do not package them into the production mod.
+sourceSets.main.java { exclude 'com/lowdragmc/photon/uitest/**' }
+
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+
+    implementation fg.deobf("local:ldlib2-forge-1.20.1:2.2.37+forge.1.20.1-all")
+    implementation fg.deobf("local:kilagraph-forge-1.20.1:20.1.0.11")
+    implementation "thedarkcolour:kotlinforforge:${kotlin_for_forge_version}"
+
+    // Optional shader-pack integration for Forge 1.20.1 (Oculus is the Iris port).
+    localImplementation fg.deobf("maven.modrinth:embeddium:${embeddium_version}")
+    localImplementation fg.deobf("maven.modrinth:oculus:${oculus_version}")
+
+    compileOnly "org.projectlombok:lombok:${lombok_version}"
+    annotationProcessor "org.projectlombok:lombok:${lombok_version}"
+    testCompileOnly "org.projectlombok:lombok:${lombok_version}"
+    testAnnotationProcessor "org.projectlombok:lombok:${lombok_version}"
+
+    // Unit tests (JUnit 5). Only for MC-free logic such as the Timeline evaluation core.
+    testImplementation(platform("org.junit:junit-bom:5.11.3"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+test {
+    useJUnitPlatform()
+}
+
+tasks.withType(ProcessResources).configureEach {
+    // set up properties for filling into metadata
+    var replaceProperties = [
+            "mod_id": mod_id,
+            "version": version,
+            "loader_version_range": loader_version_range,
+            "forge_version_range": forge_version_range,
+            "minecraft_version": minecraft_version,
+            "mod_license": mod_license,
+            "mod_name": mod_name,
+            "mod_description": mod_description,
+            "mod_url": mod_url,
+            "ldlib2_version_range": ldlib2_version_range,
+            "kilagraph_version_range": kilagraph_version_range,
+            "kotlin_for_forge_version": kotlin_for_forge_version
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/mods.toml']) {
+        expand replaceProperties + [project: project]
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes 'MixinConfigs': 'photon.mixins.json'
+    }
+    finalizedBy 'reobfJar'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// Example configuration to allow publishing using the maven-publish plugin
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            artifactId = archivesBaseName
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            url "https://maven.firstdark.dev/snapshots"
+            credentials {
+                username System.getenv("MAVEN_USER")
+                password System.getenv("MAVEN_PASS")
+            }
+        }
+    }
+}
