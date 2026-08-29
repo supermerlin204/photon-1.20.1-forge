@@ -112,11 +112,14 @@ uniform samplerBuffer PhotonData;
 
 #else
 
-in vec3 Position;
-in vec4 Color;
-in vec2 UV0;
-in ivec2 UV2;
-in vec3 Normal;
+// ShaderInstance 1.20.1 feeds VertexFormat elements by fixed attribute index. Keep the BLOCK
+// locations explicit: otherwise the GL linker compacts away unused Color/UV2 inputs and, for example,
+// binds UV0 at location 1 while the buffer still supplies it at location 2.
+layout(location = 0) in vec3 Position;
+layout(location = 1) in vec4 Color;
+layout(location = 2) in vec2 UV0;
+layout(location = 3) in ivec2 UV2;
+layout(location = 4) in vec3 Normal;
 
 #endif
 

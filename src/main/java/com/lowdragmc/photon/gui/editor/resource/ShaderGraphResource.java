@@ -8,6 +8,7 @@ import com.lowdragmc.lowdraglib2.editor.resource.IResourcePath;
 import com.lowdragmc.lowdraglib2.editor.resource.IResourceProvider;
 import com.lowdragmc.lowdraglib2.editor.ui.resource.ResourceProviderContainer;
 import com.lowdragmc.lowdraglib2.gui.texture.IGuiTexture;
+import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.gui.GraphView;
 import com.lowdragmc.photon.client.PhotonIcons;
 import com.lowdragmc.photon.client.gameobject.emitter.data.material.ShaderGraphMaterial;
@@ -82,6 +83,13 @@ public class ShaderGraphResource extends RenderTypeGraphResource {
                 }
             }
         };
+        container.setUiSupplier(path -> {
+            var material = new ShaderGraphMaterial(path);
+            return new UIElement().layout(layout -> {
+                layout.widthPercent(100);
+                layout.heightPercent(100);
+            }).style(style -> style.backgroundTexture(material.preview()));
+        });
         container.setOnDragProvider(ShaderGraphMaterial::new);
         return container;
     }

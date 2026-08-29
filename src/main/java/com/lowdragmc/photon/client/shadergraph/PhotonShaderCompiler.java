@@ -19,6 +19,10 @@ import javax.annotation.Nullable;
  * {@code PARTICLE_MODEL_INSTANCE} (model instancing) — selected by {@code #define}s injected at shader
  * build, so ONE compiled source pair serves every path.
  *
+ * <p>Editor whole-graph previews deliberately keep this compiler too: KilaGraph submits a BLOCK-format
+ * mesh, which {@code particle.glsl}'s no-define branch already supports. This keeps preview and runtime
+ * node semantics identical while preview-only particle inputs are replaced with representative values.</p>
+ *
  * <p>Scene color/depth read Photon's pipeline capture ({@code SamplerSceneColor}/{@code SamplerSceneDepth},
  * bound from {@code RenderPassPipeline}'s scene sampler — Iris-compatible) instead of KilaGraph's
  * {@code SceneCaptureManager}. The screen UV is window-relative {@code gl_FragCoord.xy / ScreenSize}
@@ -64,6 +68,11 @@ public class PhotonShaderCompiler extends ShaderGraphCompiler {
 
     public void markCustomDataUsed() {
         usesCustomData = true;
+    }
+
+    /** True while this compiler is producing a whole-graph editor preview. */
+    public static boolean isCompilingEditorPreview() {
+        return CURRENT != null && CURRENT.isEditorPreview();
     }
 
     @Override

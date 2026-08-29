@@ -24,8 +24,9 @@ import com.lowdragmc.photon.client.shadergraph.ShaderGraph;
  * both stages. Instanced render passes upload the {@code PhotonCustomData} buffer texture only when a
  * graph on the pass reads custom data (harvested via {@link PhotonShaderCompiler#markCustomDataUsed}).
  *
- * <p>Reads {@code vec4(0)} on the CPU (non-instanced) path, in node previews, and for stream indices
- * the emitter does not define (0..{@code MAX_CUSTOM_DATA}-1).</p>
+ * <p>Reads {@code vec4(0)} on the CPU (non-instanced) path and for stream indices the emitter does not
+ * define (0..{@code MAX_CUSTOM_DATA}-1). Editor previews use a neutral mid-value because no emitter
+ * custom-data stream exists there.</p>
  */
 @NodeAttribute(name = "photon_custom_data", group = "photon_input",
         graphTypes = {ShaderGraph.class, PhotonShaderFunctionGraph.class})
@@ -61,11 +62,11 @@ public class CustomDataNode extends ShaderNode {
     @Override
     public void compile(ShaderCompileContext ctx) {
         var zero = new ShaderExpr("vec4(0.0)", GlslType.VEC4);
-        if (ctx.isPreview()) {
-            ctx.output("out", zero);
+        var compiler = PhotonShaderCompiler.current();
+        if (ctx.isPreview() || PhotonShaderCompiler.isCompilingEditorPreview()) {
+            ctx.output("out", new ShaderExpr("vec4(0.5)", GlslType.VEC4));
             return;
         }
-        var compiler = PhotonShaderCompiler.current();
         if (compiler != null) {
             compiler.markCustomDataUsed();
         }

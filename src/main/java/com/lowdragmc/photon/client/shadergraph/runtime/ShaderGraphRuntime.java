@@ -3,6 +3,7 @@ package com.lowdragmc.photon.client.shadergraph.runtime;
 import com.lowdragmc.kilagraph.rendertype.compiler.CompiledShaderGraph;
 import com.lowdragmc.kilagraph.rendertype.format.KGVertexFormat;
 import com.lowdragmc.kilagraph.rendertype.runtime.KGShaderResourceProvider;
+import com.lowdragmc.kilagraph.rendertype.runtime.SceneCaptureManager;
 import com.lowdragmc.lowdraglib2.Platform;
 import com.lowdragmc.lowdraglib2.client.shader.LDShaderInstance;
 import com.lowdragmc.lowdraglib2.editor.resource.IResourcePath;
@@ -27,7 +28,7 @@ import java.util.Set;
 
 /**
  * The shared compile cache for {@link ShaderGraph} resources: one {@link Entry} per graph resource path,
- * holding the compiled GLSL plus the lazily-built {@code #define} shader variants ({@code ""} for the CPU
+ * holding separate runtime/editor-preview GLSL plus lazily-built {@code #define} variants ({@code ""} for the CPU
  * quad/trail/beam paths, {@code PARTICLE_INSTANCE} / {@code PARTICLE_MODEL_INSTANCE} for the GPU-instanced
  * particle paths). Every {@code ShaderGraphMaterial} referencing the same graph shares one entry — the
  * GL programs exist once; each material stages its own uniform values before its draw.
@@ -56,8 +57,15 @@ public final class ShaderGraphRuntime {
         @Nullable
         private final CompiledShaderGraph compiled;
         @Getter
+        @Nullable
+        private final CompiledShaderGraph previewCompiled;
+        @Getter
         private final String errorMessage;
         private final Map<String, LDShaderInstance> variants = new HashMap<>();
+        @Nullable
+        private LDShaderInstance previewVariant;
+        private boolean previewVariantFailed;
+        private boolean previewSceneAcquired;
         /** Defines whose GL build failed — remembered so a broken graph doesn't retry every frame. */
         private final Set<String> failedVariants = new HashSet<>();
         /** {@code PhotonGpuChannels} bits of the additional-data channels the graph reads. */
@@ -68,16 +76,18 @@ public final class ShaderGraphRuntime {
         private final boolean usesCustomData;
 
         private Entry(CompoundTag sourceTag, @Nullable ShaderGraph graph,
-                      @Nullable CompiledShaderGraph compiled, String errorMessage) {
-            this(sourceTag, graph, compiled, errorMessage, 0, false);
+                      @Nullable CompiledShaderGraph compiled, @Nullable CompiledShaderGraph previewCompiled,
+                      String errorMessage) {
+            this(sourceTag, graph, compiled, previewCompiled, errorMessage, 0, false);
         }
 
         private Entry(CompoundTag sourceTag, @Nullable ShaderGraph graph,
-                      @Nullable CompiledShaderGraph compiled, String errorMessage, long usedChannelMask,
-                      boolean usesCustomData) {
+                      @Nullable CompiledShaderGraph compiled, @Nullable CompiledShaderGraph previewCompiled,
+                      String errorMessage, long usedChannelMask, boolean usesCustomData) {
             this.sourceTag = sourceTag;
             this.graph = graph;
             this.compiled = compiled;
+            this.previewCompiled = previewCompiled;
             this.errorMessage = errorMessage;
             this.usedChannelMask = usedChannelMask;
             this.usesCustomData = usesCustomData;
@@ -98,6 +108,7 @@ public final class ShaderGraphRuntime {
          * {@code LDShaderHolder} does the same via its per-holder uid define.
          */
         private static final String BASE_VARIANT_DEFINE = "PHOTON_VARIANT_BASE";
+        private static final String PREVIEW_VARIANT_DEFINE = "PHOTON_VARIANT_PREVIEW";
 
         /** The shader for one define permutation ({@code ""} = the plain BLOCK-attribute variant), built
          *  lazily on the render thread. Null when the graph or the GL build failed. */
@@ -117,9 +128,36 @@ public final class ShaderGraphRuntime {
             return created;
         }
 
+        /** The editor-only graph permutation, isolated from all particle-runtime program stages. */
+        @Nullable
+        public LDShaderInstance previewVariant() {
+            if (previewCompiled == null || previewVariantFailed) return null;
+            if (previewVariant != null) return previewVariant;
+            var format = KGVertexFormat.of(previewCompiled.settings().vertexFormatElements());
+            previewVariant = KGShaderResourceProvider.createShaderInstance(
+                    previewCompiled, format, Set.of(PREVIEW_VARIANT_DEFINE));
+            if (previewVariant == null) {
+                previewVariantFailed = true;
+                return null;
+            }
+            if (previewCompiled.usesSceneColor() || previewCompiled.usesSceneDepth()) {
+                SceneCaptureManager.INSTANCE.acquire();
+                previewSceneAcquired = true;
+            }
+            return previewVariant;
+        }
+
         private void close() {
             variants.values().forEach(LDShaderInstance::close);
             variants.clear();
+            if (previewVariant != null) {
+                previewVariant.close();
+                previewVariant = null;
+            }
+            if (previewSceneAcquired) {
+                SceneCaptureManager.INSTANCE.release();
+                previewSceneAcquired = false;
+            }
         }
     }
 
@@ -149,19 +187,34 @@ public final class ShaderGraphRuntime {
 
     private static Entry compile(@Nullable CompoundTag tag) {
         if (tag == null) {
-            return new Entry(null, null, null, "shader graph resource not found");
+            return new Entry(null, null, null, null, "shader graph resource not found");
         }
         try {
             var graph = (ShaderGraph) ShaderGraphResource.INSTANCE.deserializeGraph(tag, RESOLVER);
             var compiler = (PhotonShaderCompiler) graph.createCompiler();
             var compiled = compiler.compile();
             if (compiled.hasStageErrors()) {
-                return new Entry(tag, graph, null, compiled.stageErrors().get(0).message());
+                return new Entry(tag, graph, null, null, compiled.stageErrors().get(0).message());
             }
-            return new Entry(tag, graph, compiled, "", compiler.getUsedChannelMask(), compiler.isUsesCustomData());
+            CompiledShaderGraph previewCompiled = null;
+            try {
+                var previewCompiler = (PhotonShaderCompiler) graph.createCompiler();
+                previewCompiler.editorPreview();
+                var candidate = previewCompiler.compile();
+                if (!candidate.hasStageErrors()) {
+                    previewCompiled = candidate;
+                } else {
+                    Photon.LOGGER.error("Failed to compile shader graph preview: {}",
+                            candidate.stageErrors().get(0).message());
+                }
+            } catch (Throwable e) {
+                Photon.LOGGER.error("Failed to compile shader graph preview", e);
+            }
+            return new Entry(tag, graph, compiled, previewCompiled, "",
+                    compiler.getUsedChannelMask(), compiler.isUsesCustomData());
         } catch (Throwable e) {
             Photon.LOGGER.error("Failed to compile shader graph", e);
-            return new Entry(tag, null, null, String.valueOf(e.getMessage()));
+            return new Entry(tag, null, null, null, String.valueOf(e.getMessage()));
         }
     }
 

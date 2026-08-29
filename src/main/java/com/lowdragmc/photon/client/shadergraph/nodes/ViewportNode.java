@@ -52,6 +52,12 @@ public class ViewportNode extends ShaderNode {
     public void compile(ShaderCompileContext ctx) {
         ShaderExpr screenUv = ctx.screenUv();
         ctx.output("screenUv", screenUv);
+        if (ctx.isPreview() || PhotonShaderCompiler.isCompilingEditorPreview()) {
+            ctx.output("viewportUv", screenUv);
+            ctx.output("origin", new ShaderExpr("vec2(0.0)", GlslType.VEC2));
+            ctx.output("size", new ShaderExpr("vec2(1.0)", GlslType.VEC2));
+            return;
+        }
         // frame -> viewport: the space NDC is measured in (Screen To World does this internally).
         ctx.output("viewportUv", PhotonScreenSpace.toViewportUv(ctx, screenUv));
         String viewport = ctx.useBuiltinUniform(PhotonShaderCompiler.VIEWPORT, GlslType.VEC4);

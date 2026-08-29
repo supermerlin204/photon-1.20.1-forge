@@ -3,8 +3,10 @@ package com.lowdragmc.photon.client.gameobject.emitter.data.material;
 import com.lowdragmc.kilagraph.rendertype.RenderTypeGraphTypes;
 import com.lowdragmc.kilagraph.rendertype.compiler.CompiledShaderGraph;
 import com.lowdragmc.kilagraph.rendertype.compiler.GlslType;
+import com.lowdragmc.kilagraph.rendertype.compiler.ShaderGraphCompiler;
 import com.lowdragmc.kilagraph.rendertype.runtime.KGBuiltinUniforms;
 import com.lowdragmc.kilagraph.rendertype.runtime.KGMaterialValues;
+import com.lowdragmc.kilagraph.rendertype.runtime.SceneCaptureManager;
 import com.lowdragmc.lowdraglib2.configurator.IConfigurable;
 import com.lowdragmc.lowdraglib2.configurator.ui.Configurator;
 import com.lowdragmc.lowdraglib2.configurator.ui.ConfiguratorGroup;
@@ -63,8 +65,8 @@ import java.util.Optional;
  *
  * <p>Works on every Photon render path: {@code begin} picks the shader variant matching the context's
  * define ({@code ""} CPU quads/trails/beams, {@code PARTICLE_INSTANCE}, {@code PARTICLE_MODEL_INSTANCE}).
- * Scene color/depth read the render pipeline's scene sampler (Iris-compatible), never KilaGraph's own
- * capture.</p>
+ * Runtime scene color/depth read the render pipeline's Iris-compatible scene sampler. Resource previews
+ * use KilaGraph's editor-preview compile and scene capture instead.</p>
  */
 @OnlyIn(Dist.CLIENT)
 @ParametersAreNonnullByDefault
@@ -82,6 +84,8 @@ public class ShaderGraphMaterial extends ShaderInstanceMaterial {
     private ShaderGraphRuntime.Entry entry;
     @Nullable
     private KGMaterialValues values;
+    @Nullable
+    private KGMaterialValues previewValues;
 
     public ShaderGraphMaterial() {
     }
@@ -104,6 +108,7 @@ public class ShaderGraphMaterial extends ShaderInstanceMaterial {
         this.graphPath = graphPath == null ? new BuiltinPath("") : graphPath;
         this.entry = null;
         this.values = null;
+        this.previewValues = null;
     }
 
     public boolean isCompiledError() {
@@ -122,6 +127,8 @@ public class ShaderGraphMaterial extends ShaderInstanceMaterial {
             entry = current;
             var compiled = current == null ? null : current.getCompiled();
             values = compiled == null ? null : new KGMaterialValues(compiled);
+            var previewCompiled = current == null ? null : current.getPreviewCompiled();
+            previewValues = previewCompiled == null ? null : new KGMaterialValues(previewCompiled);
             if (current != null) {
                 reconcileOverrides(current);
             }
@@ -175,22 +182,36 @@ public class ShaderGraphMaterial extends ShaderInstanceMaterial {
         if (entry == null || !entry.isValid()) {
             return PhotonShaders.getHDRParticleShader();
         }
-        var shader = entry.variant(context.getShaderDefine());
-        var compiled = entry.getCompiled();
+        boolean renderingPreview = context.isRenderingPreview();
+        var shader = renderingPreview ? entry.previewVariant() : entry.variant(context.getShaderDefine());
+        var compiled = renderingPreview ? entry.getPreviewCompiled() : entry.getCompiled();
         if (shader == null || compiled == null) {
             return PhotonShaders.getHDRParticleShader();
         }
         // Stage this material's uniforms/samplers on the shared shader — uploaded by the draw's apply().
         KGBuiltinUniforms.bind(shader, compiled.builtinUniforms());
-        bindDynamicUniforms(shader, compiled);
-        if (values != null) {
-            values.apply(shader);
+        bindDynamicUniforms(shader, compiled, renderingPreview);
+        var materialValues = renderingPreview ? previewValues : values;
+        if (materialValues != null) {
+            materialValues.apply(shader);
         }
         return shader;
     }
 
     /** The engine-driven uniforms/samplers (Photon pipeline state), mirroring CustomShaderMaterial. */
-    private void bindDynamicUniforms(ShaderInstance shader, CompiledShaderGraph compiled) {
+    private void bindDynamicUniforms(ShaderInstance shader, CompiledShaderGraph compiled,
+                                     boolean renderingPreview) {
+        if (renderingPreview) {
+            // editorPreview() defines screen UV as mesh UV. Leave U_ViewPort at its zero default so
+            // PhotonScreenSpace keeps that identity mapping instead of remapping it as window pixels.
+            if (compiled.usesSceneColor() || compiled.usesSceneDepth()) {
+                shader.setSampler(ShaderGraphCompiler.SCENE_COLOR_SAMPLER,
+                        SceneCaptureManager.INSTANCE.colorTextureId());
+                shader.setSampler(ShaderGraphCompiler.SCENE_DEPTH_SAMPLER,
+                        SceneCaptureManager.INSTANCE.depthTextureId());
+            }
+            return;
+        }
         var viewport = shader.getUniform(PhotonShaderCompiler.VIEWPORT);
         if (viewport != null) {
             viewport.set((float) GlStateManager.Viewport.x(), (float) GlStateManager.Viewport.y(),
@@ -238,8 +259,14 @@ public class ShaderGraphMaterial extends ShaderInstanceMaterial {
 
     /** Write one override into the live value store, typed by the compiled uniform field. */
     private void applyOverride(String name, Object value) {
-        if (values == null || entry == null || entry.getCompiled() == null) return;
-        var compiled = entry.getCompiled();
+        if (entry == null) return;
+        applyOverride(values, entry.getCompiled(), name, value);
+        applyOverride(previewValues, entry.getPreviewCompiled(), name, value);
+    }
+
+    private static void applyOverride(@Nullable KGMaterialValues values,
+                                      @Nullable CompiledShaderGraph compiled, String name, Object value) {
+        if (values == null || compiled == null) return;
         if (value instanceof RenderTypeGraphTypes.Sampler2DValue sampler) {
             if (com.lowdragmc.lowdraglib2.LDLib2.isValidResourceLocation(sampler.location())) {
                 values.setTexture(name, ResourceLocation.parse(sampler.location()));
@@ -292,6 +319,7 @@ public class ShaderGraphMaterial extends ShaderInstanceMaterial {
         invalidateOverridesCache();
         entry = null; // force value-store rebuild (defaults + overrides) on next use
         values = null;
+        previewValues = null;
         if (!(tag instanceof CompoundTag compound)) return;
         var overridesTag = compound.getCompound("overrides");
         for (var name : overridesTag.getAllKeys()) {
@@ -463,6 +491,7 @@ public class ShaderGraphMaterial extends ShaderInstanceMaterial {
                     ShaderGraphRuntime.invalidate(getGraphPath());
                     entry = null;
                     values = null;
+                    previewValues = null;
                     reloadVariableConfigurators(variablesGroup);
                 }).setText("photon.reload_shader").layout(layout -> layout.alignSelf(AlignItems.CENTER)));
 
@@ -536,6 +565,7 @@ public class ShaderGraphMaterial extends ShaderInstanceMaterial {
             invalidateOverridesCache();
             entry = null; // force a value-store rebuild (defaults + remaining overrides) on next use
             values = null;
+            previewValues = null;
             reloadVariableConfigurators(variablesGroup);
         });
         reset.layout(layout -> {

@@ -33,8 +33,9 @@ import java.util.List;
  * both stages. Instanced render passes auto-enable whatever channels the graph reads (the mask is
  * harvested at compile time via {@link PhotonShaderCompiler#markChannelUsed}).
  *
- * <p>Reads 0 on the CPU (non-instanced) path, in node previews, and on particle kinds that don't
- * support the chosen channel.</p>
+ * <p>Reads 0 on the CPU (non-instanced) path and on particle kinds that don't support the chosen
+ * channel. Editor previews use stable representative values so lifetime-driven opacity and scale do
+ * not collapse to zero when no emitter exists.</p>
  */
 @NodeAttribute(name = "photon_additional_data", group = "photon_input",
         graphTypes = {ShaderGraph.class, PhotonShaderFunctionGraph.class})
@@ -79,11 +80,11 @@ public class AdditionalDataNode extends ShaderNode {
         var channel = currentChannel();
         var glslType = glslType(channel);
         var zero = zeroExpr(glslType);
-        if (ctx.isPreview()) {
-            ctx.output("out", zero);
+        var compiler = PhotonShaderCompiler.current();
+        if (ctx.isPreview() || PhotonShaderCompiler.isCompilingEditorPreview()) {
+            ctx.output("out", previewExpr(channel));
             return;
         }
-        var compiler = PhotonShaderCompiler.current();
         if (compiler != null) {
             compiler.markChannelUsed(channel);
         }
@@ -129,6 +130,21 @@ public class AdditionalDataNode extends ShaderNode {
         return type == GlslType.VEC3
                 ? new ShaderExpr("vec3(0.0)", GlslType.VEC3)
                 : new ShaderExpr("0.0", GlslType.FLOAT);
+    }
+
+    /** Stable mid-lifetime values keep particle-driven graphs visible without pretending to simulate an emitter. */
+    private static ShaderExpr previewExpr(PhotonGpuChannels.Channel channel) {
+        if ("vec3".equals(channel.typeName())) {
+            return switch (channel.id()) {
+                case "addition_gpu_data.beam_direction" -> new ShaderExpr("vec3(1.0, 0.0, 0.0)", GlslType.VEC3);
+                default -> new ShaderExpr("vec3(0.0)", GlslType.VEC3);
+            };
+        }
+        return switch (channel.id()) {
+            case "addition_gpu_data.lifetime", "addition_gpu_data.beam_length" ->
+                    new ShaderExpr("1.0", GlslType.FLOAT);
+            default -> new ShaderExpr("0.5", GlslType.FLOAT);
+        };
     }
 
     /** The editor dropdown over every registered channel, labelled by its lang entry. */

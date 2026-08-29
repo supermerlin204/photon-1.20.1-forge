@@ -9,6 +9,7 @@ import com.lowdragmc.lowdraglib2.nodegraphtookit.api.node.NodeAttribute;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.api.type.TypeHandles;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.model.node.definition.IPortDefinitionContext;
 import com.lowdragmc.photon.client.shadergraph.PhotonShaderFunctionGraph;
+import com.lowdragmc.photon.client.shadergraph.PhotonShaderCompiler;
 import com.lowdragmc.photon.client.shadergraph.ShaderGraph;
 
 /**
@@ -35,6 +36,10 @@ public class DepthFadeNode extends ShaderNode {
 
     @Override
     public void compile(ShaderCompileContext ctx) {
+        if (ctx.isPreview() || PhotonShaderCompiler.isCompilingEditorPreview()) {
+            ctx.output("fade", new ShaderExpr("1.0", GlslType.FLOAT));
+            return;
+        }
         ShaderExpr sceneEye = ctx.sampleSceneDepthEye(ctx.screenUv());
         ShaderExpr fragEye = ctx.fragmentEyeDepth();
         // An unconnected distance reads the port's inline constant editor (default 1.0).
