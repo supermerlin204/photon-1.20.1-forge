@@ -111,21 +111,15 @@ public class FXProject implements IProject {
             exportMenuSubscription.unsubscribe();
         }
         exportMenuSubscription = editor.fileMenu.registerMenuCreator((tab, menu) ->
-                menu.branch("ldlib.gui.editor.menu.export", m -> {
-                    // plain .fx: pure definition data (references only) — usable wherever the
-                    // referenced resources already exist (this machine, a mod jar, an .fxpack)
-                    m.leaf("photon.export_fx", () -> showExportFxDialog(editor));
-                    // .fxpack: a resource-pack zip carrying the fx plus everything it references —
-                    // the self-contained distribution format (additive: exports into the same pack
-                    // accumulate, shared resources are stored once)
-                    m.leaf("photon.export_fxpack", () -> showExportFxPackDialog(editor));
-                    // browse/remove the effects inside an existing pack
-                    m.leaf("photon.manage_fxpack", () -> showManageFxPackDialog(editor));
-                }));
+                menu.leaf("photon.export_fx", () -> showExportFxDialog(editor))
+                        .leaf("photon.export_fxpack", () -> showExportFxPackDialog(editor))
+                        .leaf("photon.manage_fxpack", () -> showManageFxPackDialog(editor)));
     }
 
     private void showExportFxDialog(Editor editor) {
-        Dialog.showFileDialog("ldlib.gui.editor.tips.save_as", new File(LDLib2.getAssetsDir(), "%s/fx/".formatted(Photon.MOD_ID)), false,
+        var exportDir = new File(LDLib2.getAssetsDir(), "%s/fx/".formatted(Photon.MOD_ID));
+        Dialog.showFileDialog("ldlib.gui.editor.tips.save_as", exportDir, false,
+                new File(exportDir, defaultEffectName(editor) + FX.SUFFIX),
                 Dialog.suffixFilter(FX.SUFFIX), file -> {
                     if (file == null || file.isDirectory()) return;
                     if (!file.getName().endsWith(FX.SUFFIX)) {
@@ -140,18 +134,30 @@ public class FXProject implements IProject {
                     } catch (Exception e) {
                         Photon.LOGGER.error("Failed to export fx to {}", file, e);
                     }
-                }).show(editor);
+                }).show(editor.getModularUI());
     }
 
     private void showExportFxPackDialog(Editor editor) {
-        Dialog.showFileDialog("ldlib.gui.editor.tips.save_as", FXPacks.getFxPacksDir(), false,
+        var exportDir = FXPacks.getFxPacksDir();
+        Dialog.showFileDialog("ldlib.gui.editor.tips.save_as", exportDir, false,
+                new File(exportDir, defaultEffectName(editor) + FXPacks.SUFFIX),
                 Dialog.suffixFilter(FXPacks.SUFFIX), file -> {
                     if (file == null || file.isDirectory()) return;
                     if (!file.getName().endsWith(FXPacks.SUFFIX)) {
                         file = new File(file.getParentFile(), file.getName() + FXPacks.SUFFIX);
                     }
                     showFxNameDialog(editor, file);
-                }).show(editor);
+                }).show(editor.getModularUI());
+    }
+
+    /** Base name used to preselect the save directory and make the confirm action usable. */
+    private static String defaultEffectName(Editor editor) {
+        var projectFile = editor.getCurrentProjectFile();
+        if (projectFile != null) {
+            var name = projectFile.getName().replaceAll("\\.fxproj$", "");
+            if (!name.isBlank()) return name;
+        }
+        return "effect";
     }
 
     /** Ask for the fx's name inside the pack (its id becomes {@code <packname>:<name>}). */
@@ -160,7 +166,7 @@ public class FXProject implements IProject {
                 ? editor.getCurrentProjectFile().getName().replaceAll("\\.fxproj$", "")
                 : "effect";
         Dialog.stringEditorDialog("photon.export_fxpack.fx_name", defaultName, null,
-                name -> exportIntoFxPack(editor, fxpackFile, name)).show(editor);
+                name -> exportIntoFxPack(editor, fxpackFile, name)).show(editor.getModularUI());
     }
 
     private void showManageFxPackDialog(Editor editor) {
@@ -169,7 +175,7 @@ public class FXProject implements IProject {
                     if (file != null && file.isFile()) {
                         showFxPackContents(editor, file);
                     }
-                }).show(editor);
+                }).show(editor.getModularUI());
     }
 
     /** List a pack's effects with a remove button each; removal garbage-collects orphaned resources. */
@@ -201,7 +207,8 @@ public class FXProject implements IProject {
                     new Label().setText(fxId.toString()).layout(layout -> layout.flex(1)),
                     new Button().setText("✕").setOnClick(e -> {
                         if (FXPacks.isFileLocked(fxpackFile)) {
-                            Dialog.showNotification("photon.manage_fxpack", "photon.fxpack.locked", null).show(editor);
+                            Dialog.showNotification("photon.manage_fxpack", "photon.fxpack.locked", null)
+                                    .show(editor.getModularUI());
                             return;
                         }
                         try {
@@ -218,14 +225,14 @@ public class FXProject implements IProject {
         dialog.addContent(list);
         dialog.addButton(new Button().setOnClick(e -> dialog.close())
                 .setText("ldlib.gui.tips.confirm").addClass("__confirm-button__"));
-        dialog.show(editor);
+        dialog.show(editor.getModularUI());
     }
 
     private void exportIntoFxPack(Editor editor, File fxpackFile, String fxName) {
         if (FXPacks.isFileLocked(fxpackFile)) {
             // a mounted pack that served a read holds a ZipFile handle; on Windows that blocks the
             // zipfs rename-over-original commit — tell the user how to release it instead of failing
-            Dialog.showNotification("photon.export_fxpack", "photon.fxpack.locked", null).show(editor);
+            Dialog.showNotification("photon.export_fxpack", "photon.fxpack.locked", null).show(editor.getModularUI());
             return;
         }
         try {
@@ -238,7 +245,7 @@ public class FXProject implements IProject {
             Dialog.showNotification("photon.export_fxpack",
                     "%s → %s%s".formatted(result.fxId(), fxpackFile.getName(),
                             result.warnings().isEmpty() ? "" : "  (%d warnings, see log)".formatted(result.warnings().size())),
-                    null).show(editor);
+                    null).show(editor.getModularUI());
         } catch (Exception e) {
             Photon.LOGGER.error("Failed to export fx into {}", fxpackFile, e);
         }
