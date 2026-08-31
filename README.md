@@ -1,179 +1,117 @@
-# Photon
+# Photon Forge Port
 
-<div align="center">
+## 中文说明
 
-**A real-time VFX toolkit for Minecraft — particles, trails, beams, timelines, shader graphs, and post-processing, all authored in-game.**
+这是 Photon 的 **非官方 Minecraft Forge 1.20.1 移植版本**。
 
-[![GitHub stars](https://img.shields.io/github/stars/low-drag-mc/photon?style=for-the-badge&logo=github)](https://github.com/Low-Drag-MC/Photon/stargazers)
-[![CurseForge](https://img.shields.io/badge/CurseForge-Photon-F16436?style=for-the-badge&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/photon)
-[![Modrinth downloads](https://img.shields.io/modrinth/dt/photon-editor?style=for-the-badge&logo=modrinth&label=Modrinth)](https://modrinth.com/mod/photon-editor)
-[![Latest Maven version](https://img.shields.io/maven-metadata/v?style=for-the-badge&label=latest&metadataUrl=https%3A%2F%2Fmaven.firstdark.dev%2Fsnapshots%2Fcom%2Flowdragmc%2Fphoton%2Fphoton-neoforge-1.21.1%2Fmaven-metadata.xml)](https://maven.firstdark.dev/#/snapshots/com/lowdragmc/photon/photon-neoforge-1.21.1)
-[![NeoForge](https://img.shields.io/badge/NeoForge-21.1+-E04E14?style=for-the-badge)](https://neoforged.net/)
-[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-EF9421?style=for-the-badge)](LICENSE)
+本仓库不是 Low-Drag-MC 官方发布物，也不代表原作者的官方支持或认可。代码、资源和行为可能与官方 Photon 版本不同；使用、分发或二次开发前，请先阅读仓库内的 [LICENSE](LICENSE)。
 
-[Documentation](https://low-drag-mc.github.io/LowDragMC-Doc/en/photon2/) |
-[Commands](https://low-drag-mc.github.io/LowDragMC-Doc/en/photon2/commands.html) |
-[Java Integration](https://low-drag-mc.github.io/LowDragMC-Doc/en/photon2/Java%20Integration/) |
-[Discord](https://discord.com/invite/sDdf2yD9bh) |
-[CurseForge](https://www.curseforge.com/minecraft/mc-mods/photon) |
-[Modrinth](https://modrinth.com/mod/photon-editor)
+本移植版本面向 Forge 1.20.1，并使用经过移植的依赖：
 
-</div>
+- [LDLib2 Forge 1.20.1 移植版](https://github.com/supermerlin204/ldlib2-1.20.1-forge)
+- [KilaGraph Forge 1.20.1 移植版](https://github.com/supermerlin204/kilagraph-1.20.1-forge)
 
----
+### 上游与移植关系
 
-Photon is a VFX editor mod for Minecraft, inspired by Unity. It brings a Unity-style particle system, trail and beam rendering, a non-linear timeline, node-based shader and post-processing graphs, and a full in-game editor to Minecraft — so mod authors can build effects for their content, and players can create and play effects with commands.
+- 上游 Photon：[Low-Drag-MC/Photon](https://github.com/Low-Drag-MC/Photon)
+- 当前仓库：基于上游 Photon 的 Forge 1.20.1 适配、维护和实验性修改
+- 当前仓库的修改不应被误认为官方 Photon 的功能、承诺或发行计划
 
-Its original intention is to let people who love VFX create without being blocked by technical skill and math problems. If you know Unity's particle system, you already know most of Photon.
+### 移植版新增功能
 
-## Showcase
+下列内容由本仓库独立添加，**上游 Photon 没有这些功能**。相关代码会在提交、文档和代码注释中使用 `Port-specific` / `本移植新增` 标记：
 
-<table>
-<tr>
-<td width="50%">
-<a href="https://www.youtube.com/watch?v=jr800pFgZBw"><img src="https://img.youtube.com/vi/jr800pFgZBw/maxresdefault.jpg" alt="Photon 2.2 showcase"></a><br>
-<strong><a href="https://www.youtube.com/watch?v=jr800pFgZBw">Photon 2.2 — Timeline, Shader Graph, Post-Processing</a></strong><br>
-The latest release in action: sequencing effects on a timeline, authoring materials as node graphs, and stacking fullscreen post effects.
-</td>
-<td width="50%">
-<a href="https://www.youtube.com/watch?v=1fXFaWheYvc"><img src="https://img.youtube.com/vi/1fXFaWheYvc/maxresdefault.jpg" alt="What is Photon"></a><br>
-<strong><a href="https://www.youtube.com/watch?v=1fXFaWheYvc">Getting Started with Photon</a></strong><br>
-An overview of the editor, the particle system, and how to build and play your first effect.
-</td>
-</tr>
-</table>
+- `WholeFXEffectExecutor`：绑定实体生命周期、但不跟随实体移动的整体 FX 旋转执行器
+- `IWholeEffectTransformer`：为世界空间粒子提供整体位置与方向变换的专用接口
+- 对模型、Billboard 和 Beam 渲染路径的整体旋转适配
 
-## Feature Highlights
+这些新增内容属于本移植版本的实现，不代表上游项目的 API，也不保证与上游未来版本兼容。
 
-<table>
-<tr>
-<td width="50%">
-<a href="https://low-drag-mc.github.io/LowDragMC-Doc/en/photon2/"><img src="https://raw.githubusercontent.com/Low-Drag-MC/LowDragMC-Doc/v2/docs/en/photon2/assets/photonn_editor.png" alt="Photon in-game FX editor"></a><br>
-<strong><a href="https://low-drag-mc.github.io/LowDragMC-Doc/en/photon2/">In-game FX Editor</a></strong><br>
-A Unity-style editor with real-time preview, dockable views, a resource browser, and an FX hierarchy. Run <code>/photon_editor</code> and start building — no restart, no external tools.
-</td>
-<td width="50%">
-<a href="https://low-drag-mc.github.io/LowDragMC-Doc/en/photon2/Materials/"><img src="https://raw.githubusercontent.com/Low-Drag-MC/LowDragMC-Doc/v2/docs/en/photon2/assets/ShaderMaterialInspector.png" alt="Shader material inspector"></a><br>
-<strong><a href="https://low-drag-mc.github.io/LowDragMC-Doc/en/photon2/Materials/">Materials and Shader Graph</a></strong><br>
-Author particle / trail / beam materials as node graphs instead of writing GLSL — scene color and depth, geometry and camera nodes, UVs, math, textures, curve and gradient values, plus reusable subgraphs. Hand-written shaders still work.
-</td>
-</tr>
-<tr>
-<td width="50%">
-<a href="https://low-drag-mc.github.io/LowDragMC-Doc/en/photon2/Materials/CustomShaderMaterial/AdditionalGPUData.html"><img src="https://raw.githubusercontent.com/Low-Drag-MC/LowDragMC-Doc/v2/docs/en/photon2/assets/GPUData.png" alt="Custom GPU data"></a><br>
-<strong><a href="https://low-drag-mc.github.io/LowDragMC-Doc/en/photon2/Materials/CustomShaderMaterial/AdditionalGPUData.html">Custom GPU Data</a></strong><br>
-Per-emitter custom data streams (vector / color functions) readable per particle in shader graphs and hand-written shaders, on tile, trail, beam, and ara-trail particles, with selectable time sources.
-</td>
-<td width="50%">
-<a href="https://low-drag-mc.github.io/LowDragMC-Doc/en/photon2/"><img src="https://raw.githubusercontent.com/Low-Drag-MC/LowDragMC-Doc/v2/docs/en/photon2/assets/CurveAndGradient.png" alt="Curve and gradient editors"></a><br>
-<strong><a href="https://low-drag-mc.github.io/LowDragMC-Doc/en/photon2/">Curves, Gradients, and Modules</a></strong><br>
-Almost every value is a curve, a gradient, a random range, or a constant, edited inline. Emitter modules mirror Unity's: shape, velocity / rotation / size / color over lifetime, noise, collision, sub-emitters, external forces, and more.
-</td>
-</tr>
-</table>
+### 协议摘要
 
-### Also in Photon 2.2
+本项目及其直接修改版本遵循 [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/)（CC BY-NC-SA 4.0）。以下是便于阅读的摘要，完整法律条款以 [LICENSE](LICENSE) 为准：
 
-- **Timeline** — a non-linear timeline for sequencing effects: animation tracks that keyframe almost any emitter property (curve, gradient, and expression clips), record mode, signal / seed / audio / speed / control tracks, and post-process clips.
-- **Post-Processing** — an Effect Graph chains fullscreen passes, each pass its own shader graph. Ships with bloom, depth of field, blurs, vignette, chromatic aberration, glitch, film grain, outline, color grading, and more. Effects are requested with an animatable weight and per-parameter overrides; overlapping requests blend by weight.
-- **Custom Mask / Custom Depth** — Unreal-style per-object masking: flag emitters into named groups, then cull or outline post effects to just those pixels.
-- **Simulation space and force fields** — Local / World / Custom simulation space, a Force Field object (directional, gravity, drag, vortex), and an External Forces module.
-- **Models and meshes** — particles can render as 3D meshes; OBJ and JSON model sources plus built-in primitives back both the Shape module and the Model render mode.
-- **GPU instancing** — dedicated renderers for tile, trail, and beam particles, with per-instance render overrides drivable from the timeline.
-- **FX Packs** — export an effect and everything it references (materials, graphs, meshes, textures, shaders) into a single `.fxpack`, a standard resource-pack zip with content-addressed shared resources.
+1. **署名**：再分发、修改或移植时，必须注明 Photon、原作者 KilaBash、上游仓库链接、许可证链接，并说明所做修改。
+2. **非商业**：不得将本项目用于付费下载、付费访问、商业整合、商业再分发或其他直接、间接变现行为。赞助、捐赠、众筹和商业服务也属于需要获得许可的范围。
+3. **相同方式共享**：直接修改、分支和移植版本须继续使用 CC BY-NC-SA 4.0，并公开完整源代码。
+4. **移植许可**：面向其他 Minecraft 版本公开发布 Photon 移植版前，需要取得原作者的书面许可；移植版本必须保持开源、署名和非商业限制。
+5. **模组包与整合**：非商业模组包可以包含本项目；非商业情况下，也可以通过 jar-in-jar 集成，但不得将本项目本身单独收费或变现。
+6. **创作内容**：使用 Photon 制作的特效、FX Pack、图表、配置、数据包、视频等内容不属于本项目本体，通常不受本许可证约束；请勿将这条理解为对 Photon 源码或资源的再分发授权。
 
-See [CHANGELOGS.md](CHANGELOGS.md) for the full history.
+商业授权、移植许可或其他许可问题，请联系原作者 KilaBash：`yefancy@foxmail.com`。
 
-## Getting Started
+### 构建信息
 
-### Forge 1.20.1 migration workspace
+- Minecraft：1.20.1
+- Mod Loader：Minecraft Forge 47.4.x
+- Java：17
+- 依赖：移植版 LDLib2、移植版 KilaGraph、KotlinForForge
 
-This checkout also contains an in-progress Forge 1.20.1 backport for downstream testing. Its local
-`libs/ldlib2-forge-1.20.1-2.2.37+forge.1.20.1-all.jar` is built from the matching LDLib2 Forge
-backport. The hierarchy editor uses LDLib2's `TreeList` reorder API, and Photon custom translucent
-queues are registered through `ParticleRenderTypeRegistry`; these are required for the Forge editor
-path. The backport is not the upstream NeoForge release and still requires a real 1.20.1 client
-smoke test for rendering, shader packs, and networked worlds.
+构建前请确认 `libs/` 中的本地依赖与 `build.gradle` 中的版本一致。该仓库主要用于移植维护、兼容性验证和下游开发，不等同于官方发行渠道。
 
-1. Install [LDLib2](https://modrinth.com/mod/ldlib) and Photon (Minecraft `1.21.1`, NeoForge `21.1+`).
-2. Enter a creative world and run `/photon_editor` to launch the editor.
-3. Create a new FX project and start experimenting.
-4. Play the result with `/photon` commands, or bind it from Java (below).
+## English
 
-Photon focuses on effect *creation*, not usage logic — use commands or code to bind an effect to entities, blocks, or your own lifecycle manager. Full walkthrough in the [documentation](https://low-drag-mc.github.io/LowDragMC-Doc/en/photon2/) and [command reference](https://low-drag-mc.github.io/LowDragMC-Doc/en/photon2/commands.html).
+This repository is an **unofficial Minecraft Forge 1.20.1 port of Photon**.
 
-## Java Integration
+It is not an official Low-Drag-MC release and does not imply endorsement, support, or compatibility guarantees from the original author. Code, assets, and behavior may differ from upstream Photon. Read the repository [LICENSE](LICENSE) before using, redistributing, or modifying this project.
 
-Photon is published to the FirstDark Maven snapshots repository.
+This port targets Forge 1.20.1 and uses the following ported dependencies:
 
-```gradle
-repositories {
-    maven { url = "https://maven.firstdark.dev/snapshots" } // LDLib2, Photon
-}
+- [LDLib2 Forge 1.20.1 port](https://github.com/supermerlin204/ldlib2-1.20.1-forge)
+- [KilaGraph Forge 1.20.1 port](https://github.com/supermerlin204/kilagraph-1.20.1-forge)
 
-dependencies {
-    // LDLib2
-    implementation("com.lowdragmc.ldlib2:ldlib2-neoforge-${minecraft_version}:${ldlib2_version}:all")
+### Upstream and Port Status
 
-    // Photon
-    implementation("com.lowdragmc.photon:photon-neoforge-${minecraft_version}:${photon_version}") {
-        transitive = false
-    }
-}
-```
+- Upstream Photon: [Low-Drag-MC/Photon](https://github.com/Low-Drag-MC/Photon)
+- This repository: Forge 1.20.1 adaptation, maintenance, and experimental changes based on upstream Photon
+- Changes in this repository must not be presented as official Photon features, promises, or release plans
 
-Recommended project variables:
+### Port-Specific Additions
 
-```properties
-minecraft_version=1.21.1
-ldlib2_version=2.2.29
-photon_version=2.2.1
-```
+The following features are maintained independently in this repository and **do not exist in upstream Photon**. Related commits, documentation, and code comments use the `Port-specific` / `本移植新增` marker:
 
-Load an effect and bind it to a block or an entity:
+- `WholeFXEffectExecutor`: an entity-bound whole-FX rotation executor that does not follow the entity after startup
+- `IWholeEffectTransformer`: a dedicated interface for whole-effect position and orientation transforms of world-space particles
+- Whole-rotation integration for model, billboard, and beam rendering paths
 
-```java
-FX fx = FXHelper.getFX(ResourceLocation.parse("photon:fire"));
+These additions are specific to this port. They are not upstream Photon APIs and are not guaranteed to remain compatible with future upstream versions.
 
-// bind it to a block
-new BlockEffectExecutor(fx, level, pos).start();
+### License Summary
 
-// bind it to an entity
-new EntityEffectExecutor(fx, level, entity, AutoRotate.NONE).start();
-```
+This project and its direct modifications are licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/) license (CC BY-NC-SA 4.0). The following is only a practical summary; the complete and authoritative terms are in [LICENSE](LICENSE):
 
-For custom lifecycles, implement `IEffectExecutor` and drive an `FXRuntime` yourself — see the [Java Integration guide](https://low-drag-mc.github.io/LowDragMC-Doc/en/photon2/Java%20Integration/).
+1. **Attribution**: Redistributions, modifications, and ports must credit Photon and KilaBash, link the upstream repository and the license, and state what was changed.
+2. **NonCommercial**: Paid downloads, paid access, commercial integration, commercial redistribution, and other direct or indirect monetization are prohibited without permission. Sponsorships, donations, crowdfunding, and commercial services are also within the restricted scope.
+3. **ShareAlike**: Direct modifications, forks, and ports must remain under CC BY-NC-SA 4.0 and provide the complete source code.
+4. **Port permission**: Public Photon ports for other Minecraft versions require prior written permission from the original author and must remain open source, attributed, and non-commercial.
+5. **Modpacks and integration**: Non-commercial modpacks may include this project. Non-commercial jar-in-jar integration is allowed, but the mod itself must not be sold or monetized.
+6. **Created content**: Effects, FX Packs, graphs, configurations, data packs, videos, and other content made with Photon are not part of this project and are generally not covered by this license. This does not grant permission to redistribute Photon source code or assets.
+
+For commercial licensing, port permissions, or other licensing questions, contact the original author KilaBash at `yefancy@foxmail.com`.
+
+### Build Information
+
+- Minecraft: 1.20.1
+- Mod loader: Minecraft Forge 47.4.x
+- Java: 17
+- Dependencies: ported LDLib2, ported KilaGraph, and KotlinForForge
+
+Make sure the local dependencies in `libs/` match the versions declared by `build.gradle`. This repository is intended for port maintenance, compatibility work, and downstream development; it is not an official Photon distribution channel.
 
 ## Links
 
-- [Documentation](https://low-drag-mc.github.io/LowDragMC-Doc/en/photon2/)
-- [GitHub repository](https://github.com/Low-Drag-MC/Photon)
-- [CurseForge project](https://www.curseforge.com/minecraft/mc-mods/photon)
-- [Modrinth project](https://modrinth.com/mod/photon-editor)
-- [Discord community](https://discord.com/invite/sDdf2yD9bh)
-- [LDLib2](https://github.com/Low-Drag-MC/LDLib2) — the library Photon is built on
-- QQ group: `933426877`
+- [Upstream Photon](https://github.com/Low-Drag-MC/Photon)
+- [This repository](https://github.com/supermerlin204/Photon)
+- [LDLib2 Forge 1.20.1 port](https://github.com/supermerlin204/ldlib2-1.20.1-forge)
+- [KilaGraph Forge 1.20.1 port](https://github.com/supermerlin204/kilagraph-1.20.1-forge)
+- [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+- [Minecraft Forge](https://files.minecraftforge.net/net/minecraftforge/forge/)
 
-## License
+## 致谢 / Thanks
 
-> **Please read [LICENSE](./LICENSE) before redistributing, forking, or porting Photon.**
-> Using the mod is free. Redistributing or building on the *mod itself* comes with conditions, and they are enforced.
+- 感谢 KilaBash 与 [Low-Drag-MC](https://github.com/Low-Drag-MC) 开发并维护 Photon 上游项目。
+- 感谢 [LDLib2 Forge 1.20.1 移植版](https://github.com/supermerlin204/ldlib2-1.20.1-forge) 和 [KilaGraph Forge 1.20.1 移植版](https://github.com/supermerlin204/kilagraph-1.20.1-forge) 为本移植版本提供基础依赖。
+- Thanks to KilaBash and [Low-Drag-MC](https://github.com/Low-Drag-MC) for the original Photon project.
+- Thanks to the maintainers of the [LDLib2 Forge port](https://github.com/supermerlin204/ldlib2-1.20.1-forge) and [KilaGraph Forge port](https://github.com/supermerlin204/kilagraph-1.20.1-forge) for the ported libraries used here.
 
-Photon by KilaBash is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
-
-**What you can do freely:**
-
-- Use Photon in single-player, on servers, and in non-commercial modpacks.
-- Bundle it in your mod via jar-in-jar, as long as your mod is not sold or directly monetized.
-- Share and adapt the mod, with attribution, a link to the license, and a note of what you changed.
-- **Own everything you make with it.** Content created using Photon — `.fx` files, FX Packs, shader and effect graphs, configs, data packs, videos — is *not* covered by this license. License and sell your creations however you like.
-
-**What needs permission or is not allowed:**
-
-- Commercial use of the mod (paid downloads, paid access, monetized redistribution) requires explicit written permission.
-- Forks and modified versions must stay under CC BY-NC-SA 4.0 and credit the original author.
-- **Ports to Minecraft versions other than 1.21.x** need prior written consent from KilaBash, must be fully open source under the same license, must credit the original project, and may not be monetized in any form — including donations, sponsorships, and crowdfunding.
-
-Licensing inquiries (commercial use, port permissions): **yefancy@foxmail.com**
-
-See [LICENSE](./LICENSE) for the authoritative and complete terms.
+For the full legal text, see [LICENSE](LICENSE).
