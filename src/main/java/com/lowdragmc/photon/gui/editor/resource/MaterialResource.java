@@ -76,12 +76,6 @@ public class MaterialResource extends Resource<IMaterial> {
         this.pathSelectListener = listener;
     }
 
-    /**
-     * All reads go through the canonical {@code ResourceInstance.getResource} lookup (NOT the raw
-     * provider): that is the same instance every {@link UIResourceMaterial} reference resolves, so the
-     * object the inspector edits, the tile previews, and the materials applied to fx objects are always
-     * one and the same — a per-provider lookup could diverge from it after a file-watcher reload.
-     */
     @Override
     public ResourceProviderContainer<IMaterial> createResourceProviderContainer(IResourceProvider<IMaterial> provider) {
         var container = new ResourceProviderContainer<>(provider) {
@@ -98,11 +92,12 @@ public class MaterialResource extends Resource<IMaterial> {
                     layout.heightPercent(100);
                 }).style(style -> style.backgroundTexture(
                         com.lowdragmc.lowdraglib2.gui.texture.DynamicTexture.of(() -> {
-                            var material = getResourceInstance().getResource(path);
+                            var material = provider.getResource(path);
                             return material == null ? IGuiTexture.MISSING_TEXTURE : material.preview();
                         }))));
         container.setOnEdit((c, path) -> {
-            var material = getResourceInstance().getResource(path);
+            // Dirty tracking belongs to this provider, so inspect the instance it actually owns.
+            var material = provider.getResource(path);
             if (material == null) return;
             c.getEditor().inspectorView.inspect(material, configurator -> c.markResourceDirty(path));
         });
@@ -110,7 +105,7 @@ public class MaterialResource extends Resource<IMaterial> {
         container.setOnDragProvider(UIResourceMaterial::new);
 
         if (provider.supportAdd()) {
-            container.setOnMenu((c, m) -> m.branch(Icons.ADD_FILE, "ldlib.gui.editor.menu.add_resource", menu -> {
+            container.setOnCreateMenu((c, m) -> m.branch(Icons.ADD_FILE, "ldlib.gui.editor.menu.add_resource", menu -> {
                 for (var holder : PhotonRegistries.MATERIALS) {
                     var name = holder.annotation().name();
                     if (name.equals("missing") || name.equals("block_atlas") || name.equals("ui_resource_material")) continue;

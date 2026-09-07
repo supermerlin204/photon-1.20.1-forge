@@ -11,12 +11,16 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
+import net.minecraft.world.item.Item;
 import net.minecraftforge.event.AddPackFindersEvent;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.registries.DeferredRegister;
+import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraftforge.registries.RegistryObject;
 import net.minecraftforge.client.event.ModelEvent;
 import net.minecraftforge.client.event.RegisterClientReloadListenersEvent;
 import net.minecraftforge.client.event.RegisterShadersEvent;
@@ -24,9 +28,14 @@ import net.minecraftforge.client.event.RegisterShadersEvent;
 
 @OnlyIn(Dist.CLIENT)
 public class PhotonClientProxy extends PhotonCommonProxy {
+    public static final DeferredRegister<Item> TEST_ITEMS =
+            DeferredRegister.create(ForgeRegistries.ITEMS, Photon.MOD_ID);
+    public static final RegistryObject<Item> BLADE_TEST_ITEM =
+            TEST_ITEMS.register("blade_test", BladeTestItem::new);
 
     public PhotonClientProxy(IEventBus eventBus) {
         super(eventBus);
+        TEST_ITEMS.register(eventBus);
         eventBus.addListener(this::clientSetup);
         eventBus.addListener(this::shaderRegistry);
         eventBus.addListener(this::registerModels);

@@ -4,6 +4,7 @@ import com.lowdragmc.lowdraglib2.utils.Vector3fHelper;
 import com.lowdragmc.photon.client.gameobject.emitter.data.model.PhotonMesh;
 import com.lowdragmc.photon.client.gameobject.emitter.particle.ParticleConfig;
 import com.lowdragmc.photon.client.gameobject.emitter.particle.ParticleRendererSetting;
+import com.lowdragmc.photon.client.fx.IWholeEffectTransformer;
 import com.lowdragmc.photon.client.gameobject.particle.IParticle;
 import com.lowdragmc.photon.client.gameobject.particle.TileParticle;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -64,6 +65,7 @@ public class TileParticleRenderer {
         var vec3 = camera.getPosition();
 
         var localPos = particle.getSimPos(partialTicks).mulPosition(particle.getSpaceTransform());
+        localPos = applyWholeEffectPosition(particle, localPos);
         var x = (float) (localPos.x - vec3.x);
         var y = (float) (localPos.y - vec3.y);
         var z = (float) (localPos.z - vec3.z);
@@ -110,7 +112,7 @@ public class TileParticleRenderer {
 
             if (renderMode == ParticleRendererSetting.Mode.StretchedBillboard) {
                 var frame = computeStretchedFrame(particle, localPos, vec3.x, vec3.y, vec3.z, size, spaceScale);
-                quaternion = frame.rotation;
+                quaternion = applyWholeEffectRotation(particle, frame.rotation);
                 finalSizeX = frame.stretchedSizeX;
                 x -= frame.offsetX;
                 y -= frame.offsetY;
@@ -197,18 +199,25 @@ public class TileParticleRenderer {
     // instanced path
     // ---------------------------------------------------------------------
 
+    /** Set by the render pass each frame from the emitter's Tangent renderer setting; see {@link #uploadInstances}. */
+    public void setWantsTangent(boolean wantsTangent) {
+        instanceBackend.setWantsTangent(wantsTangent);
+    }
+
     /**
      * Fill and upload the per-instance data for this pass's particles. Returns true if any
      * instance was uploaded (the VAO is left bound for {@link #drawInstanced}).
      */
     public boolean uploadInstances(Collection<IParticle> particles, Camera camera, float partialTicks) {
         var renderMode = renderer.getRenderMode();
-        // rebuild the static geometry when the model mesh was hot-reloaded (identity compare), OR when a
-        // runtime renderMode override crossed the Model/non-Model boundary (different instance layout)
+        // rebuild the static geometry when the model mesh was hot-reloaded (identity compare), when a
+        // runtime renderMode override crossed the Model/non-Model boundary (different instance layout),
+        // or when the pass started/stopped wanting tangents (different mesh vertex layout)
         if (instanceBackend.isInitialized()
                 && (instanceBackend.wasBuiltForModel() != (renderMode == ParticleRendererSetting.Mode.Model)
                     || (renderMode == ParticleRendererSetting.Mode.Model
-                        && instanceBackend.getBuiltMesh() != renderer.getModelSource().getMesh()))) {
+                        && (instanceBackend.getBuiltMesh() != renderer.getModelSource().getMesh()
+                            || instanceBackend.wasBuiltWithTangent() != instanceBackend.wantsTangent())))) {
             instanceBackend.dispose();
         }
         var buffer = instanceBackend.beginUpload(particles.size());
@@ -223,6 +232,7 @@ public class TileParticleRenderer {
             if (!(p instanceof TileParticle particle) || particle.getDelay() > 0) continue;
             instanceCount++;
             var localPos = particle.getSimPos(partialTicks).mulPosition(particle.getSpaceTransform());
+            localPos = applyWholeEffectPosition(particle, localPos);
             var x = (float) (localPos.x - vec3.x);
             var y = (float) (localPos.y - vec3.y);
             var z = (float) (localPos.z - vec3.z);
@@ -259,7 +269,7 @@ public class TileParticleRenderer {
                 float finalSizeY = size.y;
                 if (renderMode == ParticleRendererSetting.Mode.StretchedBillboard) {
                     var frame = computeStretchedFrame(particle, localPos, vec3.x, vec3.y, vec3.z, size, scale);
-                    quaternion = frame.rotation;
+                    quaternion = applyWholeEffectRotation(particle, frame.rotation);
                     finalSizeX = frame.stretchedSizeX;
                     x -= frame.offsetX;
                     y -= frame.offsetY;
@@ -387,10 +397,31 @@ public class TileParticleRenderer {
         if (!Vector3fHelper.isZero(rotation)) {
             quaternion = new Quaternionf(quaternion).rotateXYZ(rotation.x, rotation.y, rotation.z);
         }
-        return quaternion;
+        // Whole-effect executors may apply an additional orientation to billboard geometry. This
+        // hook is identity for all existing executors and leaves each particle's own rotation intact.
+        return applyWholeEffectRotation(particle, quaternion);
+    }
+
+    private static Quaternionf applyWholeEffectRotation(TileParticle particle, Quaternionf particleRotation) {
+        var effect = particle.getEmitter().getEffectExecutor();
+        return effect instanceof IWholeEffectTransformer whole
+                ? whole.applyWholeEffectRotation(particleRotation) : particleRotation;
     }
 
     private static Quaternionf computeModelQuaternion(TileParticle particle, Vector3f rotation) {
-        return new Quaternionf().rotateXYZ(rotation.x, rotation.y, rotation.z).mul(particle.getSpaceRotation());
+        var quaternion = new Quaternionf().rotateXYZ(rotation.x, rotation.y, rotation.z).mul(particle.getSpaceRotation());
+        var effect = particle.getEmitter().getEffectExecutor();
+        // Local/custom simulation spaces already include the root orientation in spaceRotation;
+        // only world-space model particles need the post-spawn whole-FX orientation.
+        return !(effect instanceof IWholeEffectTransformer whole)
+                || particle.getConfig().getSimulationSpace() != ParticleConfig.Space.World
+                ? quaternion : whole.applyWholeEffectRotation(quaternion);
+    }
+
+    private static Vector3f applyWholeEffectPosition(TileParticle particle, Vector3f worldPosition) {
+        var effect = particle.getEmitter().getEffectExecutor();
+        return !(effect instanceof IWholeEffectTransformer whole)
+                || particle.getConfig().getSimulationSpace() != ParticleConfig.Space.World
+                ? worldPosition : whole.applyWholeEffectPosition(worldPosition);
     }
 }

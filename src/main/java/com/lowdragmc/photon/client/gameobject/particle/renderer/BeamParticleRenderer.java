@@ -1,6 +1,7 @@
 package com.lowdragmc.photon.client.gameobject.particle.renderer;
 
 import com.lowdragmc.photon.client.gameobject.emitter.beam.BeamConfig;
+import com.lowdragmc.photon.client.fx.IWholeEffectTransformer;
 import com.lowdragmc.photon.client.gameobject.particle.BeamParticle;
 import com.lowdragmc.photon.client.gameobject.particle.IParticle;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -52,6 +53,12 @@ public class BeamParticleRenderer {
         var light = particle.getRealLight(partialTicks);
         if (light < 0) {
             light = LightTexture.FULL_BRIGHT;
+        }
+
+        var effect = particle.getEmitter().getEffectExecutor();
+        if (effect instanceof IWholeEffectTransformer whole) {
+            from = whole.applyWholeEffectPosition(from);
+            end = whole.applyWholeEffectPosition(end);
         }
 
         return new BeamFrame(from, end,

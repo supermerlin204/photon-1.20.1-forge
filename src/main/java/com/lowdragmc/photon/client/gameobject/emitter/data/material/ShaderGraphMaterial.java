@@ -183,7 +183,7 @@ public class ShaderGraphMaterial extends ShaderInstanceMaterial {
             return PhotonShaders.getHDRParticleShader();
         }
         boolean renderingPreview = context.isRenderingPreview();
-        var shader = renderingPreview ? entry.previewVariant() : entry.variant(context.getShaderDefine());
+        var shader = renderingPreview ? entry.previewVariant() : entry.variant(context.getVariantKey(), context.getShaderDefines());
         var compiled = renderingPreview ? entry.getPreviewCompiled() : entry.getCompiled();
         if (shader == null || compiled == null) {
             return PhotonShaders.getHDRParticleShader();

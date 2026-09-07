@@ -159,8 +159,8 @@ sourceSets.main.java { exclude 'com/lowdragmc/photon/uitest/**' }
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
 
-    implementation fg.deobf("local:ldlib2-forge-1.20.1:2.2.37+forge.1.20.1-all")
-    implementation fg.deobf("local:kilagraph-forge-1.20.1:20.1.0.12")
+    implementation fg.deobf("local:ldlib2-forge-1.20.1:2.2.39.a+forge.1.20.1-all")
+    implementation fg.deobf("local:kilagraph-forge-1.20.1:20.1.0.14")
     implementation "thedarkcolour:kotlinforforge:${kotlin_for_forge_version}"
 
     // Optional shader-pack integration for Forge 1.20.1 (Oculus is the Iris port).
