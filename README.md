@@ -45,7 +45,7 @@
 - Minecraft：1.20.1
 - Mod Loader：Minecraft Forge 47.4.x
 - Java：17
-- 依赖：移植版 LDLib2、移植版 KilaGraph、KotlinForForge
+- 依赖：移植版 LDLib2、移植版 KilaGraph（使用已移除 Kotlin for Forge 强依赖的修订版 JAR）
 
 构建前请确认 `libs/` 中的本地依赖与 `build.gradle` 中的版本一致。该仓库主要用于移植维护、兼容性验证和下游开发，不等同于官方发行渠道。
 
@@ -94,7 +94,7 @@ For commercial licensing, port permissions, or other licensing questions, contac
 - Minecraft: 1.20.1
 - Mod loader: Minecraft Forge 47.4.x
 - Java: 17
-- Dependencies: ported LDLib2, ported KilaGraph, and KotlinForForge
+- Dependencies: ported LDLib2 and KilaGraph (use the revised JARs that remove the Kotlin for Forge requirement)
 
 Make sure the local dependencies in `libs/` match the versions declared by `build.gradle`. This repository is intended for port maintenance, compatibility work, and downstream development; it is not an official Photon distribution channel.
 

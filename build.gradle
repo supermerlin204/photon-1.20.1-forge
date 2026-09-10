@@ -64,7 +64,6 @@ repositories {
         }
     }
     maven { url = "https://jitpack.io/" } // Mixin Extras, Fabric ASM
-    maven { url = "https://thedarkcolour.github.io/KotlinForForge/" }
     // LDLib2
     maven {
         // location of the maven that hosts JEI files since January 2023
@@ -161,7 +160,6 @@ dependencies {
 
     implementation fg.deobf("local:ldlib2-forge-1.20.1:2.2.39.a+forge.1.20.1-all")
     implementation fg.deobf("local:kilagraph-forge-1.20.1:20.1.0.14")
-    implementation "thedarkcolour:kotlinforforge:${kotlin_for_forge_version}"
 
     // Optional shader-pack integration for Forge 1.20.1 (Oculus is the Iris port).
     localImplementation fg.deobf("maven.modrinth:embeddium:${embeddium_version}")
@@ -195,8 +193,7 @@ tasks.withType(ProcessResources).configureEach {
             "mod_description": mod_description,
             "mod_url": mod_url,
             "ldlib2_version_range": ldlib2_version_range,
-            "kilagraph_version_range": kilagraph_version_range,
-            "kotlin_for_forge_version": kotlin_for_forge_version
+            "kilagraph_version_range": kilagraph_version_range
     ]
     inputs.properties replaceProperties
 

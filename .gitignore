@@ -7,7 +7,9 @@ out/
 .gradle/
 output/
 bin/
-libs/
+libs/*
+!libs/kilagraph-forge-1.20.1-20.1.0.14.jar
+!libs/ldlib2-forge-1.20.1-2.2.39.a+forge.1.20.1-all.jar
 
 .classpath
 .project

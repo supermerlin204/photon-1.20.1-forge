@@ -1,4 +1,9 @@
 # Changelog
+## Forge dependency correction
+* Removed the Kotlin for Forge build dependency, repository and mandatory mod requirement.
+* Uses the revised LDLib2 `2.2.39.a+forge.1.20.1` and KilaGraph `20.1.0.14` JARs without
+  the erroneous Kotlin for Forge requirement. Their version numbers are unchanged; replace older JARs.
+
 ## v2.2.6.a — Forge 1.20.1 upstream sync
 * Ported upstream `b288d1c..609a975` (v2.2.4 to v2.2.6.a), retaining Forge 1.20.1 / Java 17.
 * Updated local dependencies to LDLib2 `2.2.39.a+forge.1.20.1` and KilaGraph `20.1.0.14`.
