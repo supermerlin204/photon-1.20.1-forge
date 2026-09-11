@@ -222,7 +222,8 @@ public class FXTimelineView extends View implements TimelineContext {
         fxEditor.historyView.pushHistory(Component.translatable(name), EditAction.of(redo, undo), false);
     }
     // coalesced: edit actions can fire many refreshes per frame; only the last one replays
-    @Override public void refreshPreview() { fxEditor.sceneView.requestSimulateTo(currentTimeTicks()); }
+    // Port-specific: parameter/key edits must rebuild even if playback advanced before the next draw.
+    @Override public void refreshPreview() { fxEditor.sceneView.requestParameterReplay(); }
     @Override public void openMenu(float x, float y, TreeBuilder.Menu menu) { fxEditor.openMenu(x, y, menu); }
     @Override public void requestRebuild() { rebuild(); }
     @Override public boolean isTrackSelected(Track track) {

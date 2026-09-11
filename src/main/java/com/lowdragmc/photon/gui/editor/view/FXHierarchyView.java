@@ -135,10 +135,17 @@ public class FXHierarchyView extends View {
                                 // building a multi-selection: the single-object inspector doesn't apply
                                 fxEditor.inspectorView.clear();
                             } else if (fxEditor.inspectorView.inspector.getInspectedConfigurable() != fxObject) {
-                                fxEditor.inspectorView.inspect(fxObject, null, this::onNodeInspectorClosed);
-                                fxEditor.sceneView.sceneEditor.setTransformGizmoTarget(fxObject.transform(), () ->
-                                        fxEditor.historyView.recordSerializableObject(
-                                                Component.translatable("photon.transform"), fxObject.transform(), fxObject));
+                                // Port-specific: edits and history restores rebuild particles at the current time.
+                                Runnable refresh = fxEditor.sceneView::requestParameterReplay;
+                                fxEditor.inspectorView.inspect(fxObject, configurator -> refresh.run(),
+                                        this::onNodeInspectorClosed, refresh);
+                                fxEditor.sceneView.sceneEditor.setTransformGizmoTarget(fxObject.transform(), () -> {
+                                    fxEditor.historyView.recordSerializableObject(
+                                            Component.translatable("photon.transform"), fxObject.transform(), fxObject)
+                                            .setOnExecute(transform -> refresh.run())
+                                            .setOnUndo(transform -> refresh.run());
+                                    refresh.run();
+                                });
                             }
                         } finally {
                             updatingInspector = false;

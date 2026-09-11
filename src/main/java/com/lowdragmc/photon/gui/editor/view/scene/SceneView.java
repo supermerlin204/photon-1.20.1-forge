@@ -88,6 +88,8 @@ public class SceneView extends View implements FXSceneOptions {
     private boolean isSceneLoaded = false;
     /** Coalesced seek target (-1 = none): scrub/edit streams request here, flushed once per frame. */
     private long pendingSimulateTarget = -1;
+    /** Port-specific: parameter edits require a fresh emission, even at the current time. */
+    private long pendingParameterReplay = -1;
 
     public SceneView(FXEditor fxEditor) {
         super("editor.scene", Icons.CAMERA);
@@ -119,6 +121,8 @@ public class SceneView extends View implements FXSceneOptions {
     }
 
     public void reset() {
+        pendingParameterReplay = -1;
+        pendingSimulateTarget = -1;
         particleManager.clear();
         effect.reset();
     }
@@ -140,6 +144,11 @@ public class SceneView extends View implements FXSceneOptions {
     }
 
     private void flushPendingSimulate() {
+        if (pendingParameterReplay >= 0) {
+            long target = pendingSimulateTarget >= 0 ? pendingSimulateTarget : pendingParameterReplay;
+            replayParametersAt(target);
+            return;
+        }
         if (pendingSimulateTarget >= 0) {
             var target = pendingSimulateTarget;
             pendingSimulateTarget = -1;
@@ -164,6 +173,10 @@ public class SceneView extends View implements FXSceneOptions {
     }
 
     public void simulateTo(long time) {
+        if (pendingParameterReplay >= 0) {
+            replayParametersAt(Math.max(0, time));
+            return;
+        }
         pendingSimulateTarget = -1; // a direct seek supersedes any pending coalesced request
         // a scrub/seek/edit-preview replay (never live play): silence timeline audio so a replayed clip
         // doesn't start (or leave) a long sound playing. syncSignalDispatch re-enables it next UI tick if
@@ -184,7 +197,42 @@ public class SceneView extends View implements FXSceneOptions {
     }
 
     private void runSimulationTicks(long ticks) {
-        var iter = Math.min(ticks, 500 * 20);
+        runSimulationTicksExact(Math.min(ticks, 500 * 20));
+    }
+
+    /** Port-specific: coalesce edits before drawing, keeping the progress at the first edit. */
+    public void requestParameterReplay() {
+        if (fxEditor.runtime != null && pendingParameterReplay < 0) {
+            pendingParameterReplay = particleManager.getTime();
+        }
+    }
+
+    private void replayParametersAt(long target) {
+        var runtime = fxEditor.runtime;
+        if (runtime == null) {
+            pendingParameterReplay = -1;
+            pendingSimulateTarget = -1;
+            return;
+        }
+        boolean playing = particleManager.isPlaying();
+        runtime.timelinePlayer.setSignalDispatch(false);
+        runtime.timelinePlayer.setAudioDispatch(false);
+        try {
+            reset(); // also reseeds the executor; do not replace objects held by the inspector
+            runtime.emit(effect);
+            // Unlike scrubbing, never label a capped simulation with a later, unsimulated time.
+            runSimulationTicksExact(target);
+            particleManager.setTime(target);
+        } finally {
+            if (playing) particleManager.play();
+            else particleManager.pause();
+            runtime.timelinePlayer.setSignalDispatch(playing);
+            runtime.timelinePlayer.setAudioDispatch(playing);
+        }
+    }
+
+    private void runSimulationTicksExact(long ticks) {
+        var iter = Math.max(0, ticks);
         try {
             for (long i = 0; i < iter; i++) {
                 // fast-seek: intermediate ticks skip pure per-tick visual recomputes (color/rotation/

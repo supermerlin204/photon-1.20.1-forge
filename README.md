@@ -24,6 +24,7 @@
 - `WholeFXEffectExecutor`：绑定实体生命周期、但不跟随实体移动的整体 FX 旋转执行器
 - `IWholeEffectTransformer`：为世界空间粒子提供整体位置与方向变换的专用接口
 - 对模型、Billboard 和 Beam 渲染路径的整体旋转适配
+- **参数修改即时重播预览（本移植新增）**：在 FX 对象参数面板修改旋转、大小等参数，或使用场景变换工具后，编辑器会重置整个预览 FX，并以原随机种子从零重播到修改前的时间刻，保留播放／暂停状态。参数撤销和重做也会刷新；同一帧的修改合并处理，重播不重复触发时间轴音频和信号。仅作用于编辑器，不改变游戏内发射器行为；预览进度越长，重播耗时越多。
 
 这些新增内容属于本移植版本的实现，不代表上游项目的 API，也不保证与上游未来版本兼容。
 
@@ -73,6 +74,7 @@ The following features are maintained independently in this repository and **do 
 - `WholeFXEffectExecutor`: an entity-bound whole-FX rotation executor that does not follow the entity after startup
 - `IWholeEffectTransformer`: a dedicated interface for whole-effect position and orientation transforms of world-space particles
 - Whole-rotation integration for model, billboard, and beam rendering paths
+- **Live parameter replay (Port-specific)**: changing FX object inspector parameters (such as rotation or size), or using the scene transform gizmo, resets the entire preview FX and replays from tick zero to the pre-edit tick with the same seed and playback/pause state. Parameter undo/redo also refreshes the preview. Edits within a frame are coalesced; replay suppresses timeline audio and signals. This is editor-only and does not change in-world emitters. Longer preview times require more replay work.
 
 These additions are specific to this port. They are not upstream Photon APIs and are not guaranteed to remain compatible with future upstream versions.
 
