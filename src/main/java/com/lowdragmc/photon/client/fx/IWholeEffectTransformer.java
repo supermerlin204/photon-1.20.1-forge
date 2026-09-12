@@ -12,6 +12,25 @@ public interface IWholeEffectTransformer {
         return applyWholeEffectRotation(new Quaternionf(facing).rotateXYZ(animation.x, animation.y, animation.z));
     }
 
+    /** Default camera billboards retain their authored rotation but not the whole-FX orientation. */
+    default Quaternionf applyAnimatedBillboardRotation(Quaternionf facing, Vector3f animation,
+                                                       boolean keepCameraFacing) {
+        return keepCameraFacing
+                ? new Quaternionf(facing).rotateXYZ(animation.x, animation.y, animation.z)
+                : applyAnimatedBillboardRotation(facing, animation);
+    }
+
+    /** Model animation precedes the authored space rotation, but follows the whole-FX rotation. */
+    default Quaternionf applyAnimatedModelRotation(Quaternionf spaceRotation, Vector3f animation,
+                                                   boolean spaceContainsWholeRotation) {
+        var referenceSpace = new Quaternionf(spaceRotation);
+        if (spaceContainsWholeRotation) {
+            referenceSpace = applyWholeEffectRotation(new Quaternionf()).invert().mul(referenceSpace);
+        }
+        return applyWholeEffectRotation(new Quaternionf().rotateXYZ(animation.x, animation.y, animation.z)
+                .mul(referenceSpace));
+    }
+
     Vector3f applyWholeEffectPosition(Vector3f worldPosition);
 
     /** Rotate a direction without applying the effect's pivot/translation. */

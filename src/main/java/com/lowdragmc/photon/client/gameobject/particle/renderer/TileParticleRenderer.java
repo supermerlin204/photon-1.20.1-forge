@@ -353,30 +353,28 @@ public class TileParticleRenderer {
                                                           Camera camera, float partialTicks, Vector3f rotation) {
         var quaternion = renderMode.quaternion.apply(particle, camera, partialTicks);
         if (particle.getEmitter().getEffectExecutor() instanceof IWholeEffectTransformer whole) {
-            return whole.applyAnimatedBillboardRotation(quaternion, rotation);
+            // Only the default camera-facing billboard opts out of whole-FX orientation.
+            // Position still rotates; custom facing modes and Model animation keep their contracts.
+            boolean keepCameraFacing = renderMode == ParticleRendererSetting.Mode.Billboard
+                    && particle.getRuntime().renderer.getFacingMode()
+                    == com.lowdragmc.photon.client.gameobject.emitter.particle.FacingMode.DEFAULT;
+            return whole.applyAnimatedBillboardRotation(quaternion, rotation, keepCameraFacing);
         }
         if (!Vector3fHelper.isZero(rotation)) {
             quaternion = new Quaternionf(quaternion).rotateXYZ(rotation.x, rotation.y, rotation.z);
         }
-        // Whole FX is a rigid transform of the authored result, NOT a request to re-face the
-        // real camera afterwards. Keep Qwhole * Qfacing * Qanimation so animation axes rotate too.
-        return applyWholeEffectRotation(particle, quaternion);
-    }
-
-    private static Quaternionf applyWholeEffectRotation(TileParticle particle, Quaternionf particleRotation) {
-        var effect = particle.getEmitter().getEffectExecutor();
-        return effect instanceof IWholeEffectTransformer whole
-                ? whole.applyWholeEffectRotation(particleRotation) : particleRotation;
+        return quaternion;
     }
 
     private static Quaternionf computeModelQuaternion(TileParticle particle, Vector3f rotation) {
-        var quaternion = new Quaternionf().rotateXYZ(rotation.x, rotation.y, rotation.z).mul(particle.getSpaceRotation());
         var effect = particle.getEmitter().getEffectExecutor();
-        // Local/custom simulation spaces already include the root orientation in spaceRotation;
-        // only world-space model particles need the post-spawn whole-FX orientation.
-        return !(effect instanceof IWholeEffectTransformer whole)
-                || particle.getConfig().getSimulationSpace() != ParticleConfig.Space.World
-                ? quaternion : whole.applyWholeEffectRotation(quaternion);
+        if (effect instanceof IWholeEffectTransformer whole) {
+            // Local space carries Qwhole already, but A(t) * (Qwhole * S) rotates the
+            // animation around the old world axes. Factor it out before composing Qwhole * A(t) * S.
+            return whole.applyAnimatedModelRotation(particle.getSpaceRotation(), rotation,
+                    particle.getConfig().getSimulationSpace() != ParticleConfig.Space.World);
+        }
+        return new Quaternionf().rotateXYZ(rotation.x, rotation.y, rotation.z).mul(particle.getSpaceRotation());
     }
 
     private static Vector3f applyWholeEffectPosition(TileParticle particle, Vector3f worldPosition) {
