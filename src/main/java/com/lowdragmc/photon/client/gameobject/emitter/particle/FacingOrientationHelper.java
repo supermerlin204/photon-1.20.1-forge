@@ -1,6 +1,7 @@
 package com.lowdragmc.photon.client.gameobject.emitter.particle;
 
 import com.lowdragmc.photon.client.gameobject.particle.TileParticle;
+import com.lowdragmc.photon.client.fx.WholeEffectRenderSpace;
 import net.minecraft.client.Camera;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -39,13 +40,13 @@ public final class FacingOrientationHelper {
     }
 
     private static Quaternionf computeLookAtXYZ(TileParticle particle, Camera camera, float partialTick) {
-        Vector3f particlePos = particle.getWorldPos(partialTick);
+        Vector3f particlePos = WholeEffectRenderSpace.referencePosition(particle, particle.getWorldPos(partialTick));
         Vector3f cameraPos = camera.getPosition().toVector3f();
         return FacingOrientationMath.computeLookAtXYZ(particlePos, cameraPos);
     }
 
     private static Quaternionf computeLookAtY(TileParticle particle, Camera camera, float partialTick) {
-        Vector3f particlePos = particle.getWorldPos(partialTick);
+        Vector3f particlePos = WholeEffectRenderSpace.referencePosition(particle, particle.getWorldPos(partialTick));
         Vector3f cameraPos = camera.getPosition().toVector3f();
         return FacingOrientationMath.computeLookAtY(particlePos, cameraPos);
     }
@@ -56,7 +57,7 @@ public final class FacingOrientationHelper {
             Camera camera,
             float partialTick
     ) {
-        Vector3f particlePos = particle.getWorldPos(partialTick);
+        Vector3f particlePos = WholeEffectRenderSpace.referencePosition(particle, particle.getWorldPos(partialTick));
         Vector3f cameraPos = camera.getPosition().toVector3f();
         Vector3f toCamera = new Vector3f(cameraPos).sub(particlePos);
         if (toCamera.lengthSquared() < MIN_THRESHOLD) {
@@ -87,26 +88,26 @@ public final class FacingOrientationHelper {
     }
 
     private static Quaternionf computeEmitterXY(TileParticle particle) {
-        return FacingOrientationMath.computeEmitterPlane(FacingMode.EMITTER_TRANSFORM_XY, particle.getSpaceRotation());
+        return FacingOrientationMath.computeEmitterPlane(FacingMode.EMITTER_TRANSFORM_XY, WholeEffectRenderSpace.referenceRotation(particle, particle.getSpaceRotation()));
     }
 
     private static Quaternionf computeEmitterXZ(TileParticle particle) {
-        return FacingOrientationMath.computeEmitterPlane(FacingMode.EMITTER_TRANSFORM_XZ, particle.getSpaceRotation());
+        return FacingOrientationMath.computeEmitterPlane(FacingMode.EMITTER_TRANSFORM_XZ, WholeEffectRenderSpace.referenceRotation(particle, particle.getSpaceRotation()));
     }
 
     private static Quaternionf computeEmitterYZ(TileParticle particle) {
-        return FacingOrientationMath.computeEmitterPlane(FacingMode.EMITTER_TRANSFORM_YZ, particle.getSpaceRotation());
+        return FacingOrientationMath.computeEmitterPlane(FacingMode.EMITTER_TRANSFORM_YZ, WholeEffectRenderSpace.referenceRotation(particle, particle.getSpaceRotation()));
     }
 
     private static Vector3f resolveDirection(FacingDirectionSetting setting, TileParticle particle) {
         if (setting == null || setting.getMode() == FacingDirectionSetting.Mode.DERIVE_FROM_VELOCITY) {
-            Vector3f velocity = particle.getRealVelocity();
+            Vector3f velocity = WholeEffectRenderSpace.referenceDirection(particle, particle.getRealVelocity());
             float threshold = setting != null ? setting.getMinSpeedThreshold() : 0.01f;
             if (velocity.lengthSquared() > threshold * threshold) {
                 return velocity;
             }
             return new Vector3f(0, 0, 0);
         }
-        return FacingOrientationMath.toWorldDirection(setting.getCustomDirection(), particle.getSpaceRotation());
+        return FacingOrientationMath.toWorldDirection(setting.getCustomDirection(), WholeEffectRenderSpace.referenceRotation(particle, particle.getSpaceRotation()));
     }
 }

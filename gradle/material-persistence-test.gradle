@@ -1,0 +1,14 @@
+// Disposable client-only test sources, never packaged by a regular build.
+if (project.hasProperty('materialPersistenceTest')) {
+    def report = layout.buildDirectory.file('material-persistence-report.txt').get().asFile
+    sourceSets.main.java.srcDir 'src/materialPersistenceTest/java'
+    minecraft.runs.client.workingDirectory layout.buildDirectory.dir('material-persistence-client').get().asFile
+    minecraft.runs.client.property 'photon.materialReport', report.absolutePath
+    tasks.matching { it.name == 'runClient' }.configureEach {
+        doFirst { if (report.exists()) report.delete() }
+        doLast {
+            if (!report.exists() || !report.text.startsWith('PASS:')) throw new GradleException('Material persistence probe failed: ' + (report.exists() ? report.text : 'missing report'))
+            println report.text
+        }
+    }
+}

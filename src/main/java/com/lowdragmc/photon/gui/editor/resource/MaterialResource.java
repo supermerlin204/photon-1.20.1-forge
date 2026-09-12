@@ -99,7 +99,29 @@ public class MaterialResource extends Resource<IMaterial> {
             // Dirty tracking belongs to this provider, so inspect the instance it actually owns.
             var material = provider.getResource(path);
             if (material == null) return;
-            c.getEditor().inspectorView.inspect(material, configurator -> c.markResourceDirty(path));
+            // The inspector owns this editing instance. A provider refresh may replace its cached
+            // instance, and the browser may dispose this container when navigating directories.
+            // Queuing only a path would then save a different object (or never flush at all).
+            // Commit the edited instance before a later tick can reload the file instead.
+            var lastSaved = new java.util.concurrent.atomic.AtomicReference<net.minecraft.nbt.CompoundTag>();
+            Runnable saveEdit = () -> {
+                if (!provider.canEdit(path) || !provider.hasResource(path)) return;
+                // A type-driven setter and its ordinary widget may both notify for one edit.
+                var snapshot = material.serializeWrapper();
+                if (snapshot == null) {
+                    com.lowdragmc.photon.Photon.LOGGER.error("Failed to serialize edited material {}", path);
+                    return;
+                }
+                if (snapshot.equals(lastSaved.get())) return;
+                if (provider.addResource(path, material)) {
+                    lastSaved.set(snapshot.copy());
+                    provider.getResourceInstance().clearCache();
+                    c.reloadSpecificResource(path);
+                } else {
+                    com.lowdragmc.photon.Photon.LOGGER.error("Failed to save edited material {}", path);
+                }
+            };
+            c.getEditor().inspectorView.inspect(material, configurator -> saveEdit.run(), null, saveEdit);
         });
 
         container.setOnDragProvider(UIResourceMaterial::new);

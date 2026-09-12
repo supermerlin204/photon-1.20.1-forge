@@ -567,6 +567,9 @@ public class ShaderGraphMaterial extends ShaderInstanceMaterial {
             values = null;
             previewValues = null;
             reloadVariableConfigurators(variablesGroup);
+            // The old sub-group has been detached by the rebuild. Notify from the still-attached
+            // variables group so resource saving and inspector undo history receive the reset.
+            variablesGroup.notifyChanges();
         });
         reset.layout(layout -> {
             layout.height(14);
@@ -611,6 +614,7 @@ public class ShaderGraphMaterial extends ShaderInstanceMaterial {
      * their full custom editors, vectors/colors the built-in ones).
      */
     private class VariableRow implements IFieldValueConfigurable {
+        private ConfiguratorGroup changeTarget;
         private final String name;
         private final TypeHandle type;
         @Nullable
@@ -628,6 +632,9 @@ public class ShaderGraphMaterial extends ShaderInstanceMaterial {
             overrides.put(name, value);
             invalidateOverridesCache();
             applyOverride(name, value);
+            // Popup/custom graph controls may call the setter without emitting a CHANGE event.
+            // Notify from the attached row so the inspector persists every accepted value.
+            if (changeTarget != null) changeTarget.notifyChanges();
         }
 
         @SuppressWarnings("unchecked")
@@ -655,6 +662,7 @@ public class ShaderGraphMaterial extends ShaderInstanceMaterial {
 
         @Override
         public void buildConfigurator(ConfiguratorGroup father) {
+            changeTarget = father;
             var resolved = type.resolveConfigurable();
             if (resolved == null) return;
             var configurable = resolved.createConfigurable(this, type);

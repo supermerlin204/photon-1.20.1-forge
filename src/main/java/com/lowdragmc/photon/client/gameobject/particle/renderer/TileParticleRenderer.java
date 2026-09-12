@@ -5,6 +5,7 @@ import com.lowdragmc.photon.client.gameobject.emitter.data.model.PhotonMesh;
 import com.lowdragmc.photon.client.gameobject.emitter.particle.ParticleConfig;
 import com.lowdragmc.photon.client.gameobject.emitter.particle.ParticleRendererSetting;
 import com.lowdragmc.photon.client.fx.IWholeEffectTransformer;
+import com.lowdragmc.photon.client.fx.WholeEffectRenderSpace;
 import com.lowdragmc.photon.client.gameobject.particle.IParticle;
 import com.lowdragmc.photon.client.gameobject.particle.TileParticle;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -112,11 +113,11 @@ public class TileParticleRenderer {
 
             if (renderMode == ParticleRendererSetting.Mode.StretchedBillboard) {
                 var frame = computeStretchedFrame(particle, localPos, vec3.x, vec3.y, vec3.z, size, spaceScale);
-                quaternion = applyWholeEffectRotation(particle, frame.rotation);
-                finalSizeX = frame.stretchedSizeX;
-                x -= frame.offsetX;
-                y -= frame.offsetY;
-                z -= frame.offsetZ;
+                quaternion = frame.rotation();
+                finalSizeX = frame.stretchedSizeX();
+                x -= frame.offsetX();
+                y -= frame.offsetY();
+                z -= frame.offsetZ();
             } else {
                 quaternion = computeBillboardQuaternion(particle, renderMode, camera, partialTicks, rotation);
             }
@@ -269,11 +270,11 @@ public class TileParticleRenderer {
                 float finalSizeY = size.y;
                 if (renderMode == ParticleRendererSetting.Mode.StretchedBillboard) {
                     var frame = computeStretchedFrame(particle, localPos, vec3.x, vec3.y, vec3.z, size, scale);
-                    quaternion = applyWholeEffectRotation(particle, frame.rotation);
-                    finalSizeX = frame.stretchedSizeX;
-                    x -= frame.offsetX;
-                    y -= frame.offsetY;
-                    z -= frame.offsetZ;
+                    quaternion = frame.rotation();
+                    finalSizeX = frame.stretchedSizeX();
+                    x -= frame.offsetX();
+                    y -= frame.offsetY();
+                    z -= frame.offsetZ();
                 } else {
                     quaternion = computeBillboardQuaternion(particle, renderMode, camera, partialTicks, rotation);
                 }
@@ -332,73 +333,33 @@ public class TileParticleRenderer {
     // shared orientation math (used by BOTH the CPU and instanced paths)
     // ---------------------------------------------------------------------
 
-    /**
-     * Velocity-aligned stretched-billboard frame: rotation quaternion, the stretched X size
-     * (lengthScale + speed * velocityScale) and the trailing camera-relative position offset.
-     */
-    private record StretchedFrame(Quaternionf rotation, float stretchedSizeX,
-                                  float offsetX, float offsetY, float offsetZ) {
-    }
-
-    private StretchedFrame computeStretchedFrame(TileParticle particle, Vector3f worldPos,
+    private StretchedBillboardMath.Frame computeStretchedFrame(TileParticle particle, Vector3f worldPos,
                                                  double camX, double camY, double camZ,
                                                  Vector3f size, Vector3f spaceScale) {
-        Vector3f vel = particle.getRealVelocity();
-        float speed = vel.length();
-
-        Vector3f right = new Vector3f();
-        if (speed > 1e-5f) {
-            right.set(vel).div(speed);
-        } else {
-            right.set(1, 0, 0);
-        }
-
-        Vector3f dirToCam = new Vector3f((float) (camX - worldPos.x), (float) (camY - worldPos.y), (float) (camZ - worldPos.z));
-        if (dirToCam.lengthSquared() > 1e-5f) {
-            dirToCam.normalize();
-        } else {
-            dirToCam.set(0, 0, 1);
-        }
-
-        Vector3f up = new Vector3f();
-        dirToCam.cross(right, up);
-
-        if (up.lengthSquared() < 1e-5f) {
-            if (Math.abs(right.y) > 0.99f) {
-                up.set(0, 0, 1).cross(right).normalize();
-            } else {
-                up.set(0, 1, 0).cross(right).normalize();
-            }
-        } else {
-            up.normalize();
-        }
-
-        Vector3f forward = new Vector3f();
-        right.cross(up, forward).normalize();
-
-        Matrix3f mat = new Matrix3f(
-                right.x,   right.y,   right.z,
-                up.x,      up.y,      up.z,
-                forward.x, forward.y, forward.z
-        );
-        var quaternion = new Quaternionf().setFromNormalized(mat);
-
-        float stretch = renderer.getLengthScale() + speed * renderer.getVelocityScale();
-        float stretchedSizeX = size.x * stretch;
-
-        float offsetAmount = (stretchedSizeX - size.x) * spaceScale.x;
-        return new StretchedFrame(quaternion, stretchedSizeX,
-                right.x * offsetAmount, right.y * offsetAmount, right.z * offsetAmount);
+        var effect = particle.getEmitter().getEffectExecutor();
+        var velocity = WholeEffectRenderSpace.referenceDirection(particle, particle.getRealVelocity());
+        // worldPos has already received the render-position transform in both rendering paths.
+        var referencePos = effect instanceof IWholeEffectTransformer whole
+                ? whole.removeWholeEffectPosition(new Vector3f(worldPos)) : worldPos;
+        var frame = StretchedBillboardMath.compute(velocity, referencePos, camX, camY, camZ, size, spaceScale,
+                renderer.getLengthScale(), renderer.getVelocityScale());
+        if (!(effect instanceof IWholeEffectTransformer whole)) return frame;
+        var offset = whole.applyWholeEffectDirection(new Vector3f(frame.offsetX(), frame.offsetY(), frame.offsetZ()));
+        return new StretchedBillboardMath.Frame(whole.applyWholeEffectRotation(frame.rotation()),
+                frame.stretchedSizeX(), offset.x, offset.y, offset.z);
     }
 
     private static Quaternionf computeBillboardQuaternion(TileParticle particle, ParticleRendererSetting.Mode renderMode,
                                                           Camera camera, float partialTicks, Vector3f rotation) {
         var quaternion = renderMode.quaternion.apply(particle, camera, partialTicks);
+        if (particle.getEmitter().getEffectExecutor() instanceof IWholeEffectTransformer whole) {
+            return whole.applyAnimatedBillboardRotation(quaternion, rotation);
+        }
         if (!Vector3fHelper.isZero(rotation)) {
             quaternion = new Quaternionf(quaternion).rotateXYZ(rotation.x, rotation.y, rotation.z);
         }
-        // Whole-effect executors may apply an additional orientation to billboard geometry. This
-        // hook is identity for all existing executors and leaves each particle's own rotation intact.
+        // Whole FX is a rigid transform of the authored result, NOT a request to re-face the
+        // real camera afterwards. Keep Qwhole * Qfacing * Qanimation so animation axes rotate too.
         return applyWholeEffectRotation(particle, quaternion);
     }
 
