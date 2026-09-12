@@ -1,3 +1,12 @@
+#ifdef PARTICLE_MODEL_INSTANCE
+// Sorted model draws keep the original instance records and shift divisor-1 attributes.
+// gl_InstanceID restarts at zero for each run, so TBO access needs the same record base.
+uniform int PhotonInstanceBase;
+#define PHOTON_INSTANCE_ID (gl_InstanceID + PhotonInstanceBase)
+#else
+#define PHOTON_INSTANCE_ID gl_InstanceID
+#endif
+
 #ifdef PARTICLE_INSTANCE
 
 layout(location = 0) in vec3 aPos;
@@ -441,7 +450,7 @@ mat4 photon_worldToObject() {
 // ---------------------------------------------------------------------------
 #if defined(PARTICLE_INSTANCE) || defined(PARTICLE_MODEL_INSTANCE) || defined(TRAIL_INSTANCE) \
  || defined(ARA_TRAIL_INSTANCE) || defined(ARA_TRAIL_TUBE_INSTANCE) || defined(BEAM_INSTANCE)
-#define PHOTON_DATA_SLOT(slot) texelFetch(PhotonData, gl_InstanceID * PHOTON_DATA_TEXELS + (slot))
+#define PHOTON_DATA_SLOT(slot) texelFetch(PhotonData, PHOTON_INSTANCE_ID * PHOTON_DATA_TEXELS + (slot))
 #endif
 
 #if defined(PARTICLE_INSTANCE) || defined(PARTICLE_MODEL_INSTANCE)
@@ -529,7 +538,7 @@ float photon_data_beam_length()     { return 0.0; }
 #if defined(PARTICLE_INSTANCE) || defined(PARTICLE_MODEL_INSTANCE)
 vec4 photon_custom_data(int i) {
     return (i < 0 || i >= PHOTON_CUSTOM_TEXELS) ? vec4(0.0)
-        : texelFetch(PhotonCustomData, gl_InstanceID * PHOTON_CUSTOM_TEXELS + i);
+        : texelFetch(PhotonCustomData, PHOTON_INSTANCE_ID * PHOTON_CUSTOM_TEXELS + i);
 }
 #else
 vec4 photon_custom_data(int i) { return vec4(0.0); }

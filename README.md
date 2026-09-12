@@ -25,6 +25,7 @@
 - `IWholeEffectTransformer`：为世界空间粒子提供整体位置与方向变换的专用接口
 - 对模型、Billboard 和 Beam 渲染路径的整体旋转适配
 - **参数修改即时重播预览（本移植新增）**：在 FX 对象参数面板修改旋转、大小等参数，或使用场景变换工具后，编辑器会重置整个预览 FX，并以原随机种子从零重播到修改前的时间刻，保留播放／暂停状态。参数撤销和重做也会刷新；同一帧的修改合并处理，重播不重复触发时间轴音频和信号。仅作用于编辑器，不改变游戏内发射器行为；预览进度越长，重播耗时越多。
+- **GPU Model 透明排序（本移植新增，非上游功能）**：在 GPU 实例化且顶点排序不为 `NONE` 时，透明模型按三角形投影重叠关系进行远到近排序，修复刀光等模型在特定视角下出现的异常三角区域。配套优化包括工作区与共享顶点变换复用、精确排序缓存、按需索引上传，以及 OpenGL 4.2 快速绘制路径（保留 3.3 兼容路径）。不改变材质混合方式或整体旋转逻辑；大量密集重叠仍有排序开销，真正互穿或循环遮挡仍可能无法完全解决。
 
 这些新增内容属于本移植版本的实现，不代表上游项目的 API，也不保证与上游未来版本兼容。
 
@@ -75,6 +76,7 @@ The following features are maintained independently in this repository and **do 
 - `IWholeEffectTransformer`: a dedicated interface for whole-effect position and orientation transforms of world-space particles
 - Whole-rotation integration for model, billboard, and beam rendering paths
 - **Live parameter replay (Port-specific)**: changing FX object inspector parameters (such as rotation or size), or using the scene transform gizmo, resets the entire preview FX and replays from tick zero to the pre-edit tick with the same seed and playback/pause state. Parameter undo/redo also refreshes the preview. Edits within a frame are coalesced; replay suppresses timeline audio and signals. This is editor-only and does not change in-world emitters. Longer preview times require more replay work.
+- **GPU Model transparency sorting (Port-specific, not an upstream feature)**: with GPU instancing enabled and vertex sorting set to a mode other than `NONE`, translucent models use back-to-front triangle ordering based on projected overlap, fixing angle-dependent triangular artifacts in effects such as blade slashes. Optimizations include reusable workspaces and shared vertex transforms, exact-input caching, conditional index uploads, and an OpenGL 4.2 drawing fast path with a 3.3 fallback. Material blending and whole-FX rotation remain unchanged. Dense overlap still incurs sorting costs; genuine intersections or cyclic occlusion may remain unresolved.
 
 These additions are specific to this port. They are not upstream Photon APIs and are not guaranteed to remain compatible with future upstream versions.
 

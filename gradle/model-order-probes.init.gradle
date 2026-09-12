@@ -1,0 +1,25 @@
+// Opt-in diagnostics. Does not change the normal build or package test/probe classes in the mod.
+// ./gradlew.bat -I gradle/model-order-probes.init.gradle benchmarkModelOrder --offline
+// Add -PmodelOrderObj=path/to/blade.obj for the actual asset instead of the synthetic shell.
+// ./gradlew.bat -I gradle/model-order-probes.init.gradle verifyModelOrderGpu --offline [-PmodelOrderGL42]
+gradle.projectsEvaluated {
+    def photon = gradle.rootProject
+    def testSource = photon.sourceSets.test
+    photon.tasks.register('benchmarkModelOrder', JavaExec) {
+        dependsOn photon.tasks.named('testClasses')
+        classpath = testSource.runtimeClasspath
+        mainClass = 'com.lowdragmc.photon.client.gameobject.particle.renderer.ModelOrderPerformanceProbe'
+        workingDir = photon.projectDir
+        jvmArgs '-Xms512m', '-Xmx2g'
+        if (photon.hasProperty('modelOrderObj')) args photon.property('modelOrderObj')
+    }
+    photon.tasks.register('verifyModelOrderGpu', JavaExec) {
+        dependsOn photon.tasks.named('testClasses')
+        classpath = testSource.runtimeClasspath.filter {
+            !it.name.contains('natives-windows-x86') && !it.name.contains('natives-windows-arm64')
+        }
+        mainClass = 'com.lowdragmc.photon.client.gameobject.particle.renderer.ModelOrderGpuProbe'
+        workingDir = photon.projectDir
+        if (photon.hasProperty('modelOrderGL42')) args '--gl42'
+    }
+}

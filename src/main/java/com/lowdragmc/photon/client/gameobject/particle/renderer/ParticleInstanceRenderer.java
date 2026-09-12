@@ -5,8 +5,20 @@ import com.lowdragmc.photon.client.gameobject.emitter.particle.ParticleConfig;
 import com.lowdragmc.photon.client.gameobject.emitter.particle.ParticleRendererSetting;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.BufferUtils;
+import org.lwjgl.opengl.GL;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
+import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.client.renderer.ShaderInstance;
+import com.lowdragmc.photon.client.gameobject.emitter.data.RendererSetting;
+import com.lowdragmc.photon.client.gameobject.emitter.renderpipeline.RenderPassPipeline;
+import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
+import java.util.ArrayList;
 
 import static org.lwjgl.opengl.GL30.*;
+import static org.lwjgl.opengl.GL31.glDrawElementsInstanced;
+import static org.lwjgl.opengl.GL42.glDrawElementsInstancedBaseInstance;
 
 /**
  * GL-resource backend of {@link TileParticleRenderer}: billboard-quad or baked-model base
@@ -30,6 +42,20 @@ class ParticleInstanceRenderer extends InstancedRenderBackend {
     /** Whether the current static geometry carries a tangent; a change against {@link #wantsTangent}
      *  forces a rebuild (the mesh vertex layout differs). */
     private boolean builtWithTangent;
+    private float[] triangleCenters = new float[0];
+    private float[] modelPositions = new float[0];
+    private int[] triangleIndices = new int[0];
+    private ModelTriangleOrder.Workspace sortingWorkspace;
+    private FloatBuffer sortingTransforms;
+    private final Matrix4f sortingView = new Matrix4f(), sortingProjection = new Matrix4f();
+    private final Vector3f sortingPivot = new Vector3f();
+    private boolean sortingPending;
+    private IntBuffer sortedIndexBuffer;
+    private long uploadedIndexRevision = -1;
+    private ShaderInstance lastBaseShader;
+    private int lastBaseProgram = -1, lastBaseUniform = -1;
+    private int instanceAttributeBase;
+    private boolean reportedUnsortableOverlap;
 
     public ParticleInstanceRenderer(ParticleConfig config, ParticleRendererSetting.Runtime renderer) {
         this.config = config;
@@ -84,9 +110,15 @@ class ParticleInstanceRenderer extends InstancedRenderBackend {
             var vertexBase = 0;
             var pivotPoint = renderer.getModelPivot();
             var vertices = mesh.vertices();
+            modelPositions = new float[quadCount * 4 * 3];
+            for (int vertex = 0; vertex < quadCount * 4; vertex++) {
+                System.arraycopy(vertices, PhotonMesh.vertexOffset(vertex / 4, vertex % 4), modelPositions, vertex * 3, 3);
+            }
             // only touched when the emitter asked for tangents — the mesh generates them on first access
             var tangents = wantsTangent ? mesh.tangents() : null;
             var bounds = mesh.spriteBounds();
+            var centers = new ArrayList<Float>();
+            var triangles = new ArrayList<Integer>();
 
             for (int quad = 0; quad < quadCount; quad++) {
                 var brightness = shade ? mesh.shadeBrightness(quad) : 1f;
@@ -125,6 +157,16 @@ class ParticleInstanceRenderer extends InstancedRenderBackend {
                 // index (triangles are degenerate quads — the second triangle has zero area)
                 indexBuffer.put(vertexBase).put(vertexBase + 1).put(vertexBase + 2);
                 indexBuffer.put(vertexBase + 2).put(vertexBase + 3).put(vertexBase);
+                for (int[] corners : new int[][]{{0, 1, 2}, {2, 3, 0}}) {
+                    int a = PhotonMesh.vertexOffset(quad, corners[0]);
+                    int b = PhotonMesh.vertexOffset(quad, corners[1]);
+                    int c = PhotonMesh.vertexOffset(quad, corners[2]);
+                    float ux = vertices[b] - vertices[a], uy = vertices[b + 1] - vertices[a + 1], uz = vertices[b + 2] - vertices[a + 2];
+                    float vx = vertices[c] - vertices[a], vy = vertices[c + 1] - vertices[a + 1], vz = vertices[c + 2] - vertices[a + 2];
+                    if (uy * vz - uz * vy == 0 && uz * vx - ux * vz == 0 && ux * vy - uy * vx == 0) continue;
+                    for (int axis = 0; axis < 3; axis++) centers.add((vertices[a + axis] + vertices[b + axis] + vertices[c + axis]) / 3f);
+                    for (int corner : corners) triangles.add(vertexBase + corner);
+                }
                 vertexBase += 4;
             }
 
@@ -160,6 +202,9 @@ class ParticleInstanceRenderer extends InstancedRenderBackend {
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexBuffer, GL_DYNAMIC_DRAW);
             modelEboSize = 6 * quadCount;
             builtMesh = mesh;
+            triangleCenters = new float[centers.size()];
+            for (int i = 0; i < centers.size(); i++) triangleCenters[i] = centers.get(i);
+            triangleIndices = triangles.stream().mapToInt(Integer::intValue).toArray();
 
         } else {
             // particle quad
@@ -211,7 +256,7 @@ class ParticleInstanceRenderer extends InstancedRenderBackend {
     @Override
     protected void defineInstanceAttributes(int stride) {
         int attribIndex;
-        int offset = 0;
+        int offset = instanceAttributeBase;
 
         if (renderer.getRenderMode() == ParticleRendererSetting.Mode.Model) {
             attribIndex = 4;
@@ -232,5 +277,110 @@ class ParticleInstanceRenderer extends InstancedRenderBackend {
         }
 
         config.additionalGPUDataSetting.layoutAttribs(offset, stride);
+    }
+
+    @Override
+    void endUpload(FloatBuffer buffer, int count) {
+        super.endUpload(buffer, count);
+        sortingPending = builtModelMode && count > 0 && renderer.getVertexSortingMode() != RendererSetting.SortMode.NONE;
+        if (sortingPending) {
+            // Upload staging is shared between renderers. Keep only the geometry-relevant record,
+            // not a reference to that buffer. Defer expensive work until material/pass state is known.
+            int required = Math.multiplyExact(count, 10);
+            if (sortingTransforms == null || sortingTransforms.capacity() < required) {
+                sortingTransforms = FloatBuffer.allocate(Math.max(required,
+                        sortingTransforms == null ? 0 : sortingTransforms.capacity() + sortingTransforms.capacity()/2));
+            }
+            for (int i = 0; i < count; i++) for (int c = 0; c < 10; c++)
+                sortingTransforms.put(i*10+c, buffer.get(i*instanceDataSize+c));
+            sortingView.set(RenderSystem.getModelViewMatrix());
+            sortingProjection.set(RenderSystem.getProjectionMatrix());
+            sortingPivot.set(renderer.getModelPivot());
+        }
+    }
+
+    @Override
+    protected void drawGeometry(ShaderInstance shader, int count) {
+        var pipeline = RenderPassPipeline.getCurrent();
+        if (!sortingPending || !glIsEnabled(GL_BLEND)
+                || (pipeline != null && (pipeline.isMaskSubPass() || pipeline.isWireframeSubPass()))) {
+            super.drawGeometry(shader, count);
+            return;
+        }
+        if (sortingWorkspace == null) sortingWorkspace = new ModelTriangleOrder.Workspace();
+        var triangleOrder = sortingWorkspace.build(triangleCenters, triangleIndices, modelPositions,
+                sortingTransforms, 10, count, sortingPivot, sortingView, sortingProjection);
+        if (!reportedUnsortableOverlap && (triangleOrder.crossingPairs() > 0 || triangleOrder.cycleBreaks() > 0)) {
+            reportedUnsortableOverlap = true;
+            com.lowdragmc.photon.Photon.LOGGER.warn("GPU Model sorting: {} crossing triangle pairs, {} cyclic constraints. Whole-triangle ordering cannot fully resolve these overlaps (reported once per renderer).",
+                    triangleOrder.crossingPairs(), triangleOrder.cycleBreaks());
+        }
+        if (shader != lastBaseShader || shader.getId() != lastBaseProgram) {
+            lastBaseShader = shader;
+            lastBaseProgram = shader.getId();
+            lastBaseUniform = glGetUniformLocation(lastBaseProgram, "PhotonInstanceBase");
+        }
+        int baseUniform = lastBaseUniform;
+        int oldBase = baseUniform >= 0 ? glGetUniformi(shader.getId(), baseUniform) : 0;
+        boolean baseInstance = GL.getCapabilities().OpenGL42;
+        int oldArrayBuffer = baseInstance ? 0 : glGetInteger(GL_ARRAY_BUFFER_BINDING);
+        try {
+            if (resource.sortedModelEbo == -1) resource.sortedModelEbo = glGenBuffers();
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, resource.sortedModelEbo);
+            if (uploadedIndexRevision != sortingWorkspace.indexRevision()) {
+                int size = triangleOrder.indices().length;
+                if (sortedIndexBuffer == null || sortedIndexBuffer.capacity() < size) {
+                    sortedIndexBuffer = BufferUtils.createIntBuffer(Math.max(size,
+                            sortedIndexBuffer == null ? 0 : sortedIndexBuffer.capacity() + sortedIndexBuffer.capacity()/2));
+                }
+                sortedIndexBuffer.clear().put(triangleOrder.indices()).flip();
+                // Orphan on actual changes so an in-flight draw need not stall the CPU. Stable
+                // orders reuse the previous GPU contents, including across camera/animation updates.
+                glBufferData(GL_ELEMENT_ARRAY_BUFFER, (long) sortedIndexBuffer.capacity()*Integer.BYTES, GL_STREAM_DRAW);
+                glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sortedIndexBuffer);
+                uploadedIndexRevision = sortingWorkspace.indexRevision();
+            }
+            if (!baseInstance) glBindBuffer(GL_ARRAY_BUFFER, resource.instanceVbo);
+            for (var run : triangleOrder.runs()) {
+                if (baseUniform >= 0) glUniform1i(baseUniform, run.instance());
+                if (baseInstance) {
+                    // Offsets divisor attributes, but NOT gl_InstanceID: keep PhotonInstanceBase
+                    // for PhotonData/CustomData TBO indexing. No shader-version requirement added.
+                    glDrawElementsInstancedBaseInstance(GL_TRIANGLES, run.indexCount(), GL_UNSIGNED_INT,
+                            (long) run.firstIndex() * Integer.BYTES, 1, run.instance());
+                } else {
+                    instanceAttributeBase = Math.multiplyExact(run.instance(), instanceDataSize * Float.BYTES);
+                    defineInstanceAttributes(instanceDataSize * Float.BYTES);
+                    glDrawElementsInstanced(GL_TRIANGLES, run.indexCount(), GL_UNSIGNED_INT,
+                            (long) run.firstIndex() * Integer.BYTES, 1);
+                }
+            }
+        } finally {
+            if (!baseInstance) {
+                instanceAttributeBase = 0;
+                glBindBuffer(GL_ARRAY_BUFFER, resource.instanceVbo);
+                defineInstanceAttributes(instanceDataSize * Float.BYTES);
+                glBindBuffer(GL_ARRAY_BUFFER, oldArrayBuffer);
+            }
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, resource.modelEbo);
+            if (baseUniform >= 0) glUniform1i(baseUniform, oldBase);
+        }
+    }
+
+    @Override
+    public void dispose() {
+        sortingWorkspace = null;
+        sortingTransforms = null;
+        sortingPending = false;
+        sortedIndexBuffer = null;
+        uploadedIndexRevision = -1;
+        lastBaseShader = null;
+        lastBaseProgram = lastBaseUniform = -1;
+        triangleCenters = new float[0];
+        modelPositions = new float[0];
+        triangleIndices = new int[0];
+        instanceAttributeBase = 0;
+        reportedUnsortableOverlap = false;
+        super.dispose();
     }
 }

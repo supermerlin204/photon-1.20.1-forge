@@ -28,6 +28,7 @@ abstract class InstancedRenderBackend {
         protected int vao = -1;
         protected int modelVbo = -1;
         protected int modelEbo = -1;
+        protected int sortedModelEbo = -1;
         protected int instanceVbo = -1;
         // optional per-point buffer texture (vertex pulling), see pointTexelsPerPoint()
         protected int pointTbo = -1;
@@ -59,6 +60,10 @@ abstract class InstancedRenderBackend {
             if (modelEbo != -1) {
                 glDeleteBuffers(modelEbo);
                 modelEbo = -1;
+            }
+            if (sortedModelEbo != -1) {
+                glDeleteBuffers(sortedModelEbo);
+                sortedModelEbo = -1;
             }
 
             if (pointTex != -1) {
@@ -129,7 +134,7 @@ abstract class InstancedRenderBackend {
     private boolean initialized = false;
 
     @Nullable
-    private InstanceResource resource;
+    protected InstanceResource resource;
     @Nullable
     private Cleaner.Cleanable cleanable;
 
@@ -523,8 +528,15 @@ abstract class InstancedRenderBackend {
             GlStateManager._activeTexture(previousUnit);
         }
 
-        // draw instance
-        glDrawElementsInstanced(GL_TRIANGLES, modelEboSize, GL_UNSIGNED_INT, 0, instanceCount);
+        if (resource != null) {
+            glBindVertexArray(resource.vao);
+            drawGeometry(shader, instanceCount);
+        }
+    }
+
+    /** Geometry seam; sampler binding and uploaded data remain shared by all backends. */
+    protected void drawGeometry(ShaderInstance shader, int count) {
+        glDrawElementsInstanced(GL_TRIANGLES, modelEboSize, GL_UNSIGNED_INT, 0, count);
     }
 
     // per-shader memo of each buffer sampler's uniform location (the per-draw glGetUniformLocation
