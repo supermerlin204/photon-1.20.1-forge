@@ -51,6 +51,7 @@ public class TimelinePlayer {
     private boolean stopped = false;
     /** Time of the most recent {@link #evaluate}, so {@link #frame} can interpolate within the tick. */
     private double lastEvalTime = 0;
+    private long postProcessFrame = Long.MIN_VALUE;
     /** When recording (editor only), the per-frame re-apply is frozen so gizmo/inspector edits to the
      *  target persist between ticks instead of being stomped by the sampled pose. */
     private boolean recording = false;
@@ -78,6 +79,7 @@ public class TimelinePlayer {
 
     /** Called from {@code FXRuntime.emit} after all objects are emitted; resets the clock. */
     public void begin(IEffectExecutor effect) {
+        postProcessFrame = Long.MIN_VALUE;
         this.effect = effect;
         this.localTime = 0;
         this.duration = timeline.getDuration();
@@ -128,15 +130,20 @@ public class TimelinePlayer {
      * gates it), so the pose stays put when stopped.
      */
     public void frame(float partialTicks) {
-        // post effects are per-render-frame requests (stop submitting = effect stops next frame);
-        // they keep applying in record mode — recording only freezes transform animation
-        applyPostProcess(lastEvalTime + partialTicks);
+        // Post effects are collected before drawing; root rendering only updates animation.
         if (recording) return; // keep the user's live edits to the recording target
         applyAnimations(lastEvalTime + partialTicks);
     }
 
-    /** Submit every active post-process clip's effect (weighted by its fade envelope) to the
-     *  execution context's sink for THIS frame. */
+    /** Port-specific: submit before particle/mask drawing, once per frame. No catch-up or duration change. */
+    public void preparePostProcess(float partialTicks) {
+        if (stopped || effect == null || (runtime.root instanceof FXObject root && root.getDelay() > 0)) return;
+        long frame = com.lowdragmc.photon.client.postfx.runtime.PostFXTargetPool.currentFrame();
+        if (postProcessFrame == frame) return;
+        postProcessFrame = frame;
+        applyPostProcess(lastEvalTime + partialTicks);
+    }
+
     private void applyPostProcess(double time) {
         if (effect == null) return;
         for (var track : timeline.leafTracks(false)) {

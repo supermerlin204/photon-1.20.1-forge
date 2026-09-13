@@ -54,6 +54,7 @@ public final class MaterialPersistenceProbe {
             if(!material.serializeAdditionalNBT(null).equals(loaded.serializeAdditionalNBT(null))) throw new AssertionError("file reload lost overrides");
             if(!material.getGraphPath().equals(loaded.getGraphPath())) throw new AssertionError("graph reference lost");
             WarmupProbe.verify();
+            PostProcessTimingProbe.verify();
             Files.writeString(report,"PASS: material persistence; offscreen warmup first tick, repeat, definition isolation, GL/FBO/viewport restoration, invalid input and empty FX");
         } catch(Throwable t) {
             Files.writeString(report,"FAIL: "+t); t.printStackTrace();

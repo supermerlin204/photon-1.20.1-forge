@@ -121,6 +121,8 @@ public class PhotonParticleManager extends ParticleManager implements ParticleTi
 
     @Override
     public void render(PoseStack pMatrixStack, Camera pActiveRenderInfo, float pPartialTicks, Predicate<ParticleRenderType> renderTypeFilter) {
+        com.lowdragmc.photon.client.fx.FXPostProcessPreparation.prepare(particlesByRenderType(),
+                isPlaying ? pPartialTicks : 0);
         drawMode = options.getDrawMode();
         sceneBloomEnabled = options.isBloomEnabled();
         renderingManager = this;
