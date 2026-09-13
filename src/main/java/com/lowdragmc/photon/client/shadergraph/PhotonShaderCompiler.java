@@ -56,6 +56,24 @@ public class PhotonShaderCompiler extends ShaderGraphCompiler {
     @Getter
     private boolean usesCustomData;
 
+    private boolean uiMaterialPreview;
+
+    /** Material tiles have top-origin mesh UVs; scene framebuffer samples are bottom-origin. */
+    public PhotonShaderCompiler uiMaterialPreview() {
+        uiMaterialPreview = true;
+        editorPreview();
+        return this;
+    }
+
+    @Override
+    protected ShaderExpr screenUv() {
+        if (uiMaterialPreview) {
+            var uv = meshUv().code();
+            return new ShaderExpr("vec2((" + uv + ").x, 1.0 - (" + uv + ").y)", GlslType.VEC2);
+        }
+        return super.screenUv();
+    }
+
     public PhotonShaderCompiler(ShaderGraph graph) {
         super(graph);
     }

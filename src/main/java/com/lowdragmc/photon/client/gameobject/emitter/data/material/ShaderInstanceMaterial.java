@@ -80,6 +80,8 @@ public abstract class ShaderInstanceMaterial implements IMaterial {
 
         private void drawPreview(GuiGraphics graphics, float x, float y, float width, float height) {
             float imageU = 0;
+            // Uploaded image rows and UI Y are top-origin. Framebuffer screen samples
+            // use a separate preview-only correction in PhotonShaderCompiler.screenUv().
             float imageV = 0;
             float imageWidth = 1;
             float imageHeight = 1;

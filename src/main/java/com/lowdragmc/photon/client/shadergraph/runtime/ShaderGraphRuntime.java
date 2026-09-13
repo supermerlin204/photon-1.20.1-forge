@@ -203,7 +203,7 @@ public final class ShaderGraphRuntime {
             CompiledShaderGraph previewCompiled = null;
             try {
                 var previewCompiler = (PhotonShaderCompiler) graph.createCompiler();
-                previewCompiler.editorPreview();
+                previewCompiler.uiMaterialPreview();
                 var candidate = previewCompiler.compile();
                 if (!candidate.hasStageErrors()) {
                     previewCompiled = candidate;

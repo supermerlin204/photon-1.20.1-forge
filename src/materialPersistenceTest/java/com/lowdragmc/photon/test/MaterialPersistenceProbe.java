@@ -55,7 +55,8 @@ public final class MaterialPersistenceProbe {
             if(!material.getGraphPath().equals(loaded.getGraphPath())) throw new AssertionError("graph reference lost");
             WarmupProbe.verify();
             PostProcessTimingProbe.verify();
-            Files.writeString(report,"PASS: material persistence; offscreen warmup first tick, repeat, definition isolation, GL/FBO/viewport restoration, invalid input and empty FX");
+            PreviewOrientationProbe.verify();
+            Files.writeString(report,"PASS: material persistence; offscreen warmup first tick, repeat, definition isolation, GL/FBO/viewport restoration, invalid input and empty FX; post-process timing; UI screen/mesh UV orientation and unchanged runtime screen UV");
         } catch(Throwable t) {
             Files.writeString(report,"FAIL: "+t); t.printStackTrace();
         } finally { mc.stop(); }

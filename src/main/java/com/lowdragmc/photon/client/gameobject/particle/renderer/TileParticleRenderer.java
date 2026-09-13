@@ -147,6 +147,13 @@ public class TileParticleRenderer {
             var v0 = uvs.y();
             var u1 = uvs.z();
             var v1 = uvs.w();
+            // Camera.rotation() in 1.20.1 maps local +X to screen-left. Match vanilla
+            // SingleQuadParticle's U order, without changing authored/custom facing modes.
+            if (isDefaultCameraFacing(particle, renderMode)) {
+                var swap = u0;
+                u0 = u1;
+                u1 = swap;
+            }
 
             buffer.vertex(rawVertexes[0].x(), rawVertexes[0].y(), rawVertexes[0].z())
                     .color(r, g, b, a).uv(u0, v1).uv2(light).normal(normal.x, normal.y, normal.z).endVertex();
@@ -289,8 +296,10 @@ public class TileParticleRenderer {
                 buffer.put(quaternion.x).put(quaternion.y).put(quaternion.z).put(quaternion.w);
                 // color vec4
                 buffer.put(color.x).put(color.y).put(color.z).put(color.w);
-                // uv vec4 (flip v)
-                buffer.put(uvs.x).put(uvs.w).put(uvs.z).put(uvs.y);
+                // Same U order as the CPU quad; V and the atlas frame bounds are unchanged.
+                boolean flipU = isDefaultCameraFacing(particle, renderMode);
+                buffer.put(flipU ? uvs.z : uvs.x).put(uvs.w)
+                        .put(flipU ? uvs.x : uvs.z).put(uvs.y);
                 // light int
                 buffer.put(Float.intBitsToFloat(light));
             }
@@ -349,15 +358,19 @@ public class TileParticleRenderer {
                 frame.stretchedSizeX(), offset.x, offset.y, offset.z);
     }
 
+    private static boolean isDefaultCameraFacing(TileParticle particle, ParticleRendererSetting.Mode renderMode) {
+        return renderMode == ParticleRendererSetting.Mode.Billboard
+                && particle.getRuntime().renderer.getFacingMode()
+                == com.lowdragmc.photon.client.gameobject.emitter.particle.FacingMode.DEFAULT;
+    }
+
     private static Quaternionf computeBillboardQuaternion(TileParticle particle, ParticleRendererSetting.Mode renderMode,
                                                           Camera camera, float partialTicks, Vector3f rotation) {
         var quaternion = renderMode.quaternion.apply(particle, camera, partialTicks);
         if (particle.getEmitter().getEffectExecutor() instanceof IWholeEffectTransformer whole) {
             // Only the default camera-facing billboard opts out of whole-FX orientation.
             // Position still rotates; custom facing modes and Model animation keep their contracts.
-            boolean keepCameraFacing = renderMode == ParticleRendererSetting.Mode.Billboard
-                    && particle.getRuntime().renderer.getFacingMode()
-                    == com.lowdragmc.photon.client.gameobject.emitter.particle.FacingMode.DEFAULT;
+            boolean keepCameraFacing = isDefaultCameraFacing(particle, renderMode);
             return whole.applyAnimatedBillboardRotation(quaternion, rotation, keepCameraFacing);
         }
         if (!Vector3fHelper.isZero(rotation)) {
