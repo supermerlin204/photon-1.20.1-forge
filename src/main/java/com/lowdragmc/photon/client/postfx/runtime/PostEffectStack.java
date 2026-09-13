@@ -50,6 +50,17 @@ public final class PostEffectStack {
      *  sceneBloomEnabled) — routes {@link #currentSink()} to {@link #EDITOR_SCENE}. */
     private static boolean editorSceneRendering;
 
+    @Nullable
+    private static PostEffectStack isolatedSink;
+
+    /** Render-thread-only isolation for offscreen warmup; never consumes live/editor requests. */
+    public static com.lowdragmc.lowdraglib2.utils.Scope pushIsolatedSink(PostEffectStack sink) {
+        RenderSystem.assertOnRenderThread();
+        var previous = isolatedSink;
+        isolatedSink = java.util.Objects.requireNonNull(sink);
+        return () -> isolatedSink = previous;
+    }
+
     public static void setEditorSceneRendering(boolean rendering) {
         editorSceneRendering = rendering;
     }
@@ -109,6 +120,7 @@ public final class PostEffectStack {
 
     /** The stack the current render context feeds: the editor scene's while it renders, else the world's. */
     public static PostEffectStack currentSink() {
+        if (isolatedSink != null) return isolatedSink;
         return editorSceneRendering ? EDITOR_SCENE : GLOBAL;
     }
 

@@ -27,7 +27,28 @@
 - **参数修改即时重播预览（本移植新增）**：在 FX 对象参数面板修改旋转、大小等参数，或使用场景变换工具后，编辑器会重置整个预览 FX，并以原随机种子从零重播到修改前的时间刻，保留播放／暂停状态。参数撤销和重做也会刷新；同一帧的修改合并处理，重播不重复触发时间轴音频和信号。仅作用于编辑器，不改变游戏内发射器行为；预览进度越长，重播耗时越多。
 - **GPU Model 透明排序（本移植新增，非上游功能）**：在 GPU 实例化且顶点排序不为 `NONE` 时，透明模型按三角形投影重叠关系进行远到近排序，修复刀光等模型在特定视角下出现的异常三角区域。配套优化包括工作区与共享顶点变换复用、精确排序缓存、按需索引上传，以及 OpenGL 4.2 快速绘制路径（保留 3.3 兼容路径）。不改变材质混合方式或整体旋转逻辑；大量密集重叠仍有排序开销，真正互穿或循环遮挡仍可能无法完全解决。
 
+- **特效预热 API（本移植新增，非上游功能）**：`FXWarmup.warmup(id)` 默认模拟一 tick 并离屏绘制一次，用于在正式播放前准备实际触及的着色器、贴图和模型。不会将画面显示给玩家；临时实例会销毁，时间轴声音和信号不会触发，后处理请求相互隔离，共享资源缓存保留。此功能不是磁盘着色器缓存。
+
 这些新增内容属于本移植版本的实现，不代表上游项目的 API，也不保证与上游未来版本兼容。
+
+#### 特效预热调用示例
+
+```java
+import com.lowdragmc.photon.client.fx.FXWarmup;
+import com.lowdragmc.photon.client.fx.FXHelper;
+import net.minecraft.resources.ResourceLocation;
+
+// 客户端资源加载完成后，在渲染线程的加载队列中调用（不在绘制过程中调用）。
+FXWarmup.warmup(ResourceLocation.fromNamespaceAndPath("photon", "blade"));
+// 延迟发射器可指定推进 tick 数，最后绘制一次：
+FXWarmup.warmup(ResourceLocation.fromNamespaceAndPath("photon", "blade"), 20);
+// 所有可加载 FX 的 ID，供加载队列逐个预热：
+var ids = FXHelper.listAllFX();
+```
+
+建议每个加载帧处理少量 ID，不要在一个普通游戏帧中同步遍历全部。方法支持直接传入 `FX`，模拟 tick 数范围为 1–10000，返回模拟 tick 数、结束时普通粒子发射器的粒子数和调用耗时（纳秒）；粒子数为零时请检查发射延迟/速率。必须等待资源重载完成，不能在 `LoadingOverlay` 尚未结束时调用。
+
+预热在空虚拟世界中同步执行，不是后台任务；仅准备模拟过程及最终绘制实际触及的路径，不能保证覆盖延迟／条件发射器、后续着色器变体或依赖世界／实体的行为，也不保证消除所有首播卡顿。资源重载后按需重新预热。
 
 ### 协议摘要
 
@@ -78,7 +99,28 @@ The following features are maintained independently in this repository and **do 
 - **Live parameter replay (Port-specific)**: changing FX object inspector parameters (such as rotation or size), or using the scene transform gizmo, resets the entire preview FX and replays from tick zero to the pre-edit tick with the same seed and playback/pause state. Parameter undo/redo also refreshes the preview. Edits within a frame are coalesced; replay suppresses timeline audio and signals. This is editor-only and does not change in-world emitters. Longer preview times require more replay work.
 - **GPU Model transparency sorting (Port-specific, not an upstream feature)**: with GPU instancing enabled and vertex sorting set to a mode other than `NONE`, translucent models use back-to-front triangle ordering based on projected overlap, fixing angle-dependent triangular artifacts in effects such as blade slashes. Optimizations include reusable workspaces and shared vertex transforms, exact-input caching, conditional index uploads, and an OpenGL 4.2 drawing fast path with a 3.3 fallback. Material blending and whole-FX rotation remain unchanged. Dense overlap still incurs sorting costs; genuine intersections or cyclic occlusion may remain unresolved.
 
+- **FX warmup API (Port-specific, not an upstream feature)**: `FXWarmup.warmup(id)` simulates one tick and renders once to an offscreen target, preparing the shaders, textures, and models actually reached before normal playback. Temporary instances are destroyed without displaying the warmup; timeline audio/signals are suppressed and post-effect requests are isolated. Shared resource caches remain available. This is not a persistent shader cache.
+
 These additions are specific to this port. They are not upstream Photon APIs and are not guaranteed to remain compatible with future upstream versions.
+
+#### FX Warmup Usage
+
+```java
+import com.lowdragmc.photon.client.fx.FXWarmup;
+import com.lowdragmc.photon.client.fx.FXHelper;
+import net.minecraft.resources.ResourceLocation;
+
+// Call after client resource loading, on the render thread, outside an active draw.
+FXWarmup.warmup(ResourceLocation.fromNamespaceAndPath("photon", "blade"));
+// Advance more ticks for delayed emitters, then draw once:
+FXWarmup.warmup(ResourceLocation.fromNamespaceAndPath("photon", "blade"), 20);
+// IDs to enqueue for warmup:
+var ids = FXHelper.listAllFX();
+```
+
+An overload accepts an `FX` definition and/or a tick count (1–10000). The result reports ticks, the final particle-emitter particle count, and elapsed nanoseconds. If the particle count is zero, check emission delays/rates. Queue a small number of effects per loading frame **after resource reload completes**, on the render thread, outside world/UI drawing; do not call while `LoadingOverlay` is still active.
+
+This is synchronous, not a background task. Only paths reached by the simulation and final draw are prepared: delayed/conditional emitters, later shader variants, and world/entity-dependent behavior are not guaranteed to be covered. Simulation uses an empty dummy world. It reduces some first-use work, not every possible first-play stall; rerun as needed after resource reload.
 
 ### License Summary
 

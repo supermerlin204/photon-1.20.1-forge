@@ -126,11 +126,11 @@ public class PhotonParticleManager extends ParticleManager implements ParticleTi
         renderingManager = this;
         // route post-effect submission/consumption to the isolated editor-scene stack
         com.lowdragmc.photon.client.postfx.runtime.PostEffectStack.setEditorSceneRendering(true);
-        com.lowdragmc.photon.client.postfx.runtime.PostEffectStack.EDITOR_SCENE
+        com.lowdragmc.photon.client.postfx.runtime.PostEffectStack.currentSink()
                 .setEffectsEnabled(options.isEffectsEnabled());
         if (options.isMaskViewEnabled()) {
             // top-bar debug toggle: show the CustomMask contents instead of the scene this frame
-            com.lowdragmc.photon.client.postfx.runtime.PostEffectStack.EDITOR_SCENE.submit(
+            com.lowdragmc.photon.client.postfx.runtime.PostEffectStack.currentSink().submit(
                     com.lowdragmc.lowdraglib2.editor.resource.BuiltinResourceProvider.TYPE.createFullPath("show_mask"),
                     java.util.Map.of(), 1f);
         }
@@ -187,7 +187,7 @@ public class PhotonParticleManager extends ParticleManager implements ParticleTi
         // preempted the pipeline: consumedFrame got marked with doBloom=false, so the real
         // particle build passed through and silently dropped BLOOM and all effects.
         if (!renderTypeFilter.test(ParticleRenderType.PARTICLE_SHEET_TRANSLUCENT)) return;
-        var stack = com.lowdragmc.photon.client.postfx.runtime.PostEffectStack.EDITOR_SCENE;
+        var stack = com.lowdragmc.photon.client.postfx.runtime.PostEffectStack.currentSink();
         if (!stack.hasPending() || stack.isConsumedThisFrame()) return;
         int viewportX = GlStateManager.Viewport.x();
         int viewportY = GlStateManager.Viewport.y();

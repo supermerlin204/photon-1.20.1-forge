@@ -131,6 +131,10 @@ public class FXRuntime implements IScene {
      * timeline only gates active/visibility and restarts objects via the {@link TimelinePlayer}.
      */
     public void emit(IEffectExecutor effect, int delay) {
+        if (!effect.allowTimelineEvents()) {
+            timelinePlayer.setSignalDispatch(false);
+            timelinePlayer.setAudioDispatch(false);
+        }
         emitted = true;
         destroyed = false;
         // track the owning engine for isValid(): same resolution as IFXObject.emit's engine pick

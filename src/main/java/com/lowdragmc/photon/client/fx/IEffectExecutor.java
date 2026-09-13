@@ -20,6 +20,11 @@ public interface IEffectExecutor {
 
     Level getLevel();
 
+    /** Port-only: offscreen warmup disables audio/signals, including nested sub-effects. */
+    default boolean allowTimelineEvents() {
+        return true;
+    }
+
     /**
      * update each FX objects during their duration, per tick. Execute low frequency logic here.
      * <br>
