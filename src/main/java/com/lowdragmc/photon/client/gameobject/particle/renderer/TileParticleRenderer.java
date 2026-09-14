@@ -347,7 +347,7 @@ public class TileParticleRenderer {
                                                  Vector3f size, Vector3f spaceScale) {
         var effect = particle.getEmitter().getEffectExecutor();
         var velocity = WholeEffectRenderSpace.referenceDirection(particle, particle.getRealVelocity());
-        // worldPos has already received the render-position transform in both rendering paths.
+        // worldPos already includes the root pose from spawning/simulation, in both render paths.
         var referencePos = effect instanceof IWholeEffectTransformer whole
                 ? whole.removeWholeEffectPosition(new Vector3f(worldPos)) : worldPos;
         var frame = StretchedBillboardMath.compute(velocity, referencePos, camX, camY, camZ, size, spaceScale,
@@ -391,9 +391,6 @@ public class TileParticleRenderer {
     }
 
     private static Vector3f applyWholeEffectPosition(TileParticle particle, Vector3f worldPosition) {
-        var effect = particle.getEmitter().getEffectExecutor();
-        return !(effect instanceof IWholeEffectTransformer whole)
-                || particle.getConfig().getSimulationSpace() != ParticleConfig.Space.World
-                ? worldPosition : whole.applyWholeEffectPosition(worldPosition);
+        return WholeEffectRenderSpace.position(particle, worldPosition);
     }
 }

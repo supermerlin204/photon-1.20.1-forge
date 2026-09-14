@@ -5,7 +5,7 @@ import com.lowdragmc.photon.client.gameobject.particle.TileParticle;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
-/** Render-only world inputs. Local/custom space already contains the root transform. */
+/** Positions/velocities already include the root pose, either at spawn or via simulation space. */
 public final class WholeEffectRenderSpace {
     private WholeEffectRenderSpace() {}
 
@@ -16,13 +16,13 @@ public final class WholeEffectRenderSpace {
     }
 
     public static Vector3f position(TileParticle particle, Vector3f position) {
-        var whole = transformer(particle);
-        return whole == null ? position : whole.applyWholeEffectPosition(new Vector3f(position));
+        // World particles bake emitterToWorld at birth. Local/custom particles use simToWorld.
+        // Applying the whole rotation here again rotates the spawn shape twice.
+        return position;
     }
 
     public static Vector3f direction(TileParticle particle, Vector3f direction) {
-        var whole = transformer(particle);
-        return whole == null ? direction : whole.applyWholeEffectDirection(new Vector3f(direction));
+        return direction;
     }
 
     public static Quaternionf rotation(TileParticle particle, Quaternionf rotation) {

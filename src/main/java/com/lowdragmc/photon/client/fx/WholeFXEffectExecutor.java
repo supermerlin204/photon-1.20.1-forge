@@ -12,8 +12,9 @@ import org.joml.Vector3f;
  *
  * <p>The executor may be bound to an entity for lifetime cleanup, but it deliberately does not
  * follow the entity after startup. Position and orientation are sampled once when the executor is
- * constructed. Local particles continue to use the normal root transform; world-space particles
- * receive the render-time pivot transform needed to retain that orientation after spawning.</p>
+ * constructed. Local particles use the normal root transform; world-space particles bake it into
+ * their spawn position and velocity. Render-time orientation preserves model animation axes, but
+ * must not apply the pivot transform to those already-transformed positions a second time.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public class WholeFXEffectExecutor extends EntityEffectExecutor implements IWholeEffectTransformer {
